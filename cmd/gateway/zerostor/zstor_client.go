@@ -33,7 +33,7 @@ type zstorClient struct {
 // newZstorClient creates new zstorClient object
 func newZstorClient(cfg client.Config, metaDir string) (*zstorClient, error) {
 	// creates bucket manager
-	bktMgr, err := newBucketMgr(metaDir, cfg.DataStor.Shards, cfg.Namespace)
+	bktMgr, err := newBucketMgr(metaDir)
 	if err != nil {
 		return nil, err
 	}

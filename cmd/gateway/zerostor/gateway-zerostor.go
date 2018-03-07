@@ -189,22 +189,40 @@ func (zo *zerostorObjects) MakeBucketWithLocation(bucket string, location string
 func (zo *zerostorObjects) GetBucketPolicy(bucket string) (policy.BucketAccessPolicy, error) {
 	var pol policy.BucketAccessPolicy
 
-	perm, err := zo.bktMgr.getBucketPolicy()
+	bkt, err := zo.getBucket(bucket)
 	if err != nil {
 		return pol, zstorToObjectErr(errors.Trace(err), bucket)
 	}
 
-	pol.Statements = policy.SetPolicy(pol.Statements, perm, bucket, "")
+	pol.Statements = policy.SetPolicy(pol.Statements, bkt.Policy, bucket, "")
 
 	return pol, nil
 }
 
+// SetBucketPolicy implements minio.ObjectLayer.SetBucketPolicy
 func (zo *zerostorObjects) SetBucketPolicy(bucket string, policyInfo policy.BucketAccessPolicy) error {
-	return errors.Trace(minio.NotImplemented{})
+	policies := policy.GetPolicies(policyInfo.Statements, bucket)
+	// we currently only support one policy per bucket
+	supportedPrefix := bucket + "/*"
+	if len(policies) != 1 {
+		log.Println("SetBucketPolicy unsupported error: setting with multiple policies")
+		return errors.Trace(minio.NotImplemented{})
+	}
+	pol, ok := policies[supportedPrefix]
+	if !ok {
+		log.Println("SetBucketPolicy unsupported prefix")
+		return errors.Trace(minio.NotImplemented{})
+	}
+
+	// save the new policy
+	err := zo.bktMgr.setPolicy(bucket, pol)
+
+	return zstorToObjectErr(errors.Trace(err), bucket)
 }
 
 func (zo *zerostorObjects) DeleteBucketPolicy(bucket string) error {
-	return errors.Trace(minio.NotImplemented{})
+	err := zo.bktMgr.setPolicy(bucket, policy.BucketPolicyNone)
+	return zstorToObjectErr(errors.Trace(err), bucket)
 }
 
 func (zo *zerostorObjects) DeleteObject(bucket, object string) error {
@@ -255,7 +273,7 @@ func (zo *zerostorObjects) GetObject(bucket, object string, startOffset int64, l
 
 	// we don't support start offset
 	if startOffset != 0 {
-		log.Println("\t failed, startOffset != 0 = ", startOffset)
+		log.Println("\t GetObject failed, unsupported startOffset != 0 = ", startOffset)
 		return errors.Trace(minio.NotImplemented{})
 	}
 

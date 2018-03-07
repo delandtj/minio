@@ -14,7 +14,9 @@ func TestBucket(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	bucketName := "mybucket"
+	const (
+		bucketName = "mybucket"
+	)
 
 	// creates bucket
 	bkt, err := newBucket(bucketName, tmpDir)
@@ -26,6 +28,14 @@ func TestBucket(t *testing.T) {
 	ldBkt, err := newBucketFromFile(tmpDir, bucketName)
 	if err != nil {
 		t.Fatalf("failed to load bucket from file: %v", err)
+	}
+
+	if ldBkt.Name != bucketName {
+		t.Fatalf("name doesn't match : %v, expected: %v", ldBkt.Name, bucketName)
+	}
+
+	if ldBkt.Policy != defaultBucketPolicy {
+		t.Fatalf("policy doesn't match: %v, expected: %v", ldBkt.Policy, defaultBucketPolicy)
 	}
 
 	if ldBkt.Created.Unix() != bkt.Created.Unix() {
