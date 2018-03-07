@@ -185,16 +185,25 @@ func (zo *zerostorObjects) MakeBucketWithLocation(bucket string, location string
 	return zstorToObjectErr(errors.Trace(err), bucket)
 }
 
-// GetBucketPolicies implements minio.GatewayLayer.GetBucketPolicies interface
-func (zo *zerostorObjects) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy, error) {
-	return policy.BucketAccessPolicy{}, errors.Trace(minio.NotImplemented{})
+// GetBucketPolicy implements minio.ObjectLayer.GetBucketPolicy interface
+func (zo *zerostorObjects) GetBucketPolicy(bucket string) (policy.BucketAccessPolicy, error) {
+	var pol policy.BucketAccessPolicy
+
+	perm, err := zo.bktMgr.getBucketPolicy()
+	if err != nil {
+		return pol, zstorToObjectErr(errors.Trace(err), bucket)
+	}
+
+	pol.Statements = policy.SetPolicy(pol.Statements, perm, bucket, "")
+
+	return pol, nil
 }
 
-func (zo *zerostorObjects) SetBucketPolicies(bucket string, policyInfo policy.BucketAccessPolicy) error {
+func (zo *zerostorObjects) SetBucketPolicy(bucket string, policyInfo policy.BucketAccessPolicy) error {
 	return errors.Trace(minio.NotImplemented{})
 }
 
-func (zo *zerostorObjects) DeleteBucketPolicies(bucket string) error {
+func (zo *zerostorObjects) DeleteBucketPolicy(bucket string) error {
 	return errors.Trace(minio.NotImplemented{})
 }
 
@@ -322,18 +331,6 @@ func (zo *zerostorObjects) HealObject(bucket, object string, dryRun bool) (madmi
 	}
 	return res, nil
 
-}
-
-func (zo *zerostorObjects) NewMultipartUpload(bucket, object string, metadata map[string]string) (uploadID string, err error) {
-	log.Println("NewMultipartUpload ", object)
-	err = errors.Trace(minio.NotImplemented{})
-	return
-}
-
-func (zo *zerostorObjects) PutObjectPart(bucket, object, uploadID string, partID int, data *hash.Reader) (info minio.PartInfo, err error) {
-	log.Println("PutObjectPart")
-	err = errors.Trace(minio.NotImplemented{})
-	return
 }
 
 func (zo *zerostorObjects) Shutdown() error {
