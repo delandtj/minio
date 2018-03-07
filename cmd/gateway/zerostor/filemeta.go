@@ -18,6 +18,11 @@ var (
 	fileMetaPerm = os.FileMode(0644)
 )
 
+const (
+	metaObjectDir = "objects"
+	metaBucketDir = "buckets"
+)
+
 // filemeta is metadata that implements
 // github.com/zero-os/0-stor/client/metastor/db.DB interface
 type filemeta struct {
@@ -29,27 +34,15 @@ type filemeta struct {
 	metaCli         *metastor.Client
 }
 
-func newFilemeta(rootDir string, marshalFuncPair *encoding.MarshalFuncPair) (*filemeta, error) {
-	// initialize bucket's dir
-	bucketDir := filepath.Join(rootDir, "buckets")
-	if err := os.MkdirAll(bucketDir, rootDirPerm); err != nil {
-		return nil, err
-	}
-
+func newFilemeta(rootDir string, bktMgr *bucketMgr, marshalFuncPair *encoding.MarshalFuncPair) (*filemeta, error) {
 	// initialize objDir
-	objDir := filepath.Join(rootDir, "objects")
+	objDir := filepath.Join(rootDir, metaObjectDir)
 	if err := os.MkdirAll(objDir, rootDirPerm); err != nil {
-		return nil, err
-	}
-
-	bktMgr, err := newBucketMgr(bucketDir, objDir)
-	if err != nil {
 		return nil, err
 	}
 
 	return &filemeta{
 		rootDir:         rootDir,
-		bucketDir:       bucketDir,
 		objDir:          objDir,
 		bktMgr:          bktMgr,
 		marshalFuncPair: marshalFuncPair,

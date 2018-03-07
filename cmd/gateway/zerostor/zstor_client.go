@@ -21,16 +21,25 @@ import (
 	"github.com/zero-os/0-stor/client/processing"
 )
 
+// zstorClient defines 0-stor client for
+// zerostor minio gateway
 type zstorClient struct {
 	storCli  *client.Client
-	metaCli  *metastor.Client
+	metaCli  *metastor.Client // TODO : remove this field
 	bktMgr   *bucketMgr
 	filemeta *filemeta
 }
 
+// newZstorClient creates new zstorClient object
 func newZstorClient(cfg client.Config, metaDir string) (*zstorClient, error) {
+	// creates bucket manager
+	bktMgr, err := newBucketMgr(metaDir, cfg.DataStor.Shards, cfg.Namespace)
+	if err != nil {
+		return nil, err
+	}
+
 	// creates meta client
-	fm, metaCli, err := createMestatorClient(cfg.MetaStor, cfg.Namespace, metaDir)
+	fm, metaCli, err := createMestatorClient(cfg.MetaStor, bktMgr, cfg.Namespace, metaDir)
 	if err != nil {
 		return nil, err
 	}
@@ -53,9 +62,11 @@ func newZstorClient(cfg client.Config, metaDir string) (*zstorClient, error) {
 		storCli:  cli,
 		metaCli:  metaCli,
 		filemeta: fm,
-		bktMgr:   fm.bktMgr,
+		bktMgr:   bktMgr,
 	}, nil
 }
+
+// write writes object from the given reader
 func (zc *zstorClient) write(bucket, object string, rd io.Reader) (*metatypes.Metadata, error) {
 	if !zc.bucketExist(bucket) {
 		return nil, minio.BucketNotFound{}
@@ -65,6 +76,7 @@ func (zc *zstorClient) write(bucket, object string, rd io.Reader) (*metatypes.Me
 	return zc.storCli.Write(key, rd)
 }
 
+// get get object and write it to the given writer
 func (zc *zstorClient) get(bucket, object string, writer io.Writer, length int64) error {
 	if !zc.bucketExist(bucket) {
 		return minio.BucketNotFound{}
@@ -91,10 +103,12 @@ func (zc *zstorClient) get(bucket, object string, writer io.Writer, length int64
 	return zc.storCli.ReadWithMeta(*md, writer)
 }
 
+// getMeta get metadata of the given bucket-object
 func (zc *zstorClient) getMeta(bucket, object string) (*metatypes.Metadata, error) {
 	return zc.metaCli.GetMetadata(zc.toZstorKey(bucket, object))
 }
 
+// del deletes the object
 func (zc *zstorClient) del(bucket, object string) error {
 	if !zc.bucketExist(bucket) {
 		return minio.BucketNotFound{}
@@ -102,6 +116,7 @@ func (zc *zstorClient) del(bucket, object string) error {
 	return zc.storCli.Delete(zc.toZstorKey(bucket, object))
 }
 
+// repair repairs an object
 func (zc *zstorClient) repair(bucket, object string) (*metatypes.Metadata, error) {
 	if !zc.bucketExist(bucket) {
 		return nil, minio.BucketNotFound{}
@@ -109,21 +124,25 @@ func (zc *zstorClient) repair(bucket, object string) (*metatypes.Metadata, error
 	return zc.storCli.Repair(zc.toZstorKey(bucket, object))
 }
 
+// ListObjects list object in a bucket
 func (zc *zstorClient) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (minio.ListObjectsInfo, error) {
 	return zc.filemeta.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
 }
 
+// Close closes the this 0-stor client
 func (zc *zstorClient) Close() error {
 	zc.metaCli.Close()
 	zc.storCli.Close()
 	return nil
 }
 
+// bucketExist checks if the given bucket is exist
 func (zc *zstorClient) bucketExist(bucket string) bool {
 	_, ok := zc.bktMgr.get(bucket)
 	return ok
 }
 
+// toZstorKey generates 0-stor key from the given bucket/object
 func (zc *zstorClient) toZstorKey(bucket, object string) []byte {
 	return []byte(filepath.Join(bucket, object))
 }
@@ -176,7 +195,7 @@ func createTLSConfigFromDatastorTLSConfig(config *client.DataStorTLSConfig) (*tl
 	return tlsConfig, nil
 }
 
-func createMestatorClient(cfg client.MetaStorConfig, namespace, metaDir string) (fm *filemeta, mc *metastor.Client, err error) {
+func createMestatorClient(cfg client.MetaStorConfig, bktMgr *bucketMgr, namespace, metaDir string) (fm *filemeta, mc *metastor.Client, err error) {
 	var metaCfg metastor.Config
 
 	// create the metadata encoding func pair
@@ -188,7 +207,7 @@ func createMestatorClient(cfg client.MetaStorConfig, namespace, metaDir string) 
 	// create metastor database first,
 	// so that then we can create the Metastor client itself
 	// TODO: support other types of databases (e.g. badger)
-	fm, err = newFilemeta(metaDir, metaCfg.MarshalFuncPair)
+	fm, err = newFilemeta(metaDir, bktMgr, metaCfg.MarshalFuncPair)
 	if err != nil {
 		return
 	}
