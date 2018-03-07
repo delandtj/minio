@@ -1,0 +1,167 @@
+package zerostor
+
+import (
+	"io/ioutil"
+	"os"
+	"sort"
+	"testing"
+
+	"github.com/minio/minio-go/pkg/policy"
+)
+
+func TestCreateGetBucketMgr(t *testing.T) {
+	bktMgr, metaDir, err := newTestBucketMgr()
+	if err != nil {
+		t.Fatalf("failed to create test bucket manager: %v", err)
+	}
+	defer os.RemoveAll(metaDir)
+
+	bucketsToCreate := []string{"bucket_1", "bucket_2", "bucket_3", "bucket_4"}
+	sort.Strings(bucketsToCreate) // sort it so we can easily compare it
+
+	// create buckets
+	for _, bucket := range bucketsToCreate {
+		err = bktMgr.createBucket(bucket)
+		if err != nil {
+			t.Errorf("failed to create bucket `%v`: %v", bucket, err)
+		}
+	}
+
+	checkGetBuckets := func(bm *bucketMgr, expectedBuckets []string, msg string) {
+		t.Log(msg)
+		for _, bucket := range expectedBuckets {
+			// check get bucket
+			bkt, ok := bm.get(bucket)
+			if !ok {
+				t.Errorf("failed to get bucket `%v`", bucket)
+			}
+			if bkt.Name != bucket {
+				t.Errorf("invalid bucket name: %v, expected: %v", bkt.Name, bucket)
+			}
+		}
+
+		// check get all buckets
+		var gotBuckets []string
+		for _, bucket := range bm.getAllBuckets() {
+			gotBuckets = append(gotBuckets, bucket.Name)
+		}
+
+		sort.Strings(gotBuckets) // sort the name, so we can easily compare it
+
+		// compare it with original buckets
+		if len(expectedBuckets) != len(gotBuckets) {
+			t.Errorf("unexpected getAllBuckets result len: %v, expected: %v", len(gotBuckets),
+				len(expectedBuckets))
+		}
+
+		for i, bucket := range expectedBuckets {
+			if bucket != gotBuckets[i] {
+				t.Errorf("invalid bucket name: %v, expected: %v", gotBuckets[i], bucket)
+			}
+		}
+	}
+
+	// check bucket manager, make sure we could get the data
+	{
+		// check bucket manager which still use in memory data
+		checkGetBuckets(bktMgr, bucketsToCreate, "check in memory bucket manager")
+
+		// check bucket manager, with all data being loaded from file
+		loadedBktMgr, err := newBucketMgr(metaDir)
+		if err != nil {
+			t.Fatalf("failed to load bucket manager: %v", err)
+		}
+		checkGetBuckets(loadedBktMgr, bucketsToCreate, "check on disk bucket manager")
+	}
+
+	// delete buckets and then check again
+	{
+		deleteIdx := 2
+		for i := 0; i < deleteIdx; i++ {
+			bucket := bucketsToCreate[i]
+			err := bktMgr.del(bucket)
+			if err != nil {
+				t.Errorf("failed to delete bucket `%v`: %v", bucket, err)
+			}
+		}
+		checkGetBuckets(bktMgr, bucketsToCreate[deleteIdx:],
+			"check in memory bucket manager after deletion")
+
+		// check bucket manager, with all data being loaded from file
+		loadedBktMgr, err := newBucketMgr(metaDir)
+		if err != nil {
+			t.Fatalf("failed to load bucket manager: %v", err)
+		}
+		checkGetBuckets(loadedBktMgr, bucketsToCreate[deleteIdx:],
+			"check on disk bucket manager after deletion")
+	}
+}
+
+func TestBucketPolicy(t *testing.T) {
+	bktMgr, metaDir, err := newTestBucketMgr()
+	if err != nil {
+		t.Fatalf("failed to create test bucket manager: %v", err)
+	}
+	defer os.RemoveAll(metaDir)
+
+	const (
+		bucketName  = "bucket_1"
+		policyToSet = policy.BucketPolicyReadOnly
+	)
+
+	// create bucket
+	err = bktMgr.createBucket(bucketName)
+	if err != nil {
+		t.Errorf("failed to create bucket `%v`: %v", bucketName, err)
+	}
+
+	// get bucket, make sure it's policy is different than `policyToSet`
+	bkt, ok := bktMgr.get(bucketName)
+	if !ok {
+		t.Errorf("failed to get bucket `%v`", bucketName)
+	}
+
+	if bkt.Policy == policyToSet {
+		t.Fatalf("bad policy value: %v. expect different policy", bkt.Policy)
+	}
+
+	// set policy
+	err = bktMgr.setPolicy(bucketName, policyToSet)
+	if err != nil {
+		t.Errorf("failed to set bucket policy: %v", err)
+	}
+
+	checkBucketPolicy := func(bm *bucketMgr, msg string) {
+		t.Log(msg)
+		bkt, ok := bm.get(bucketName)
+		if !ok {
+			t.Errorf("failed to get bucket `%v`", bucketName)
+		}
+		if bkt.Policy != policyToSet {
+			t.Errorf("bad policy value: %v, expected: %v", bkt.Policy, policyToSet)
+		}
+	}
+
+	checkBucketPolicy(bktMgr, "check in memory bucket manager")
+
+	// check bucket manager, with all data being loaded from file
+	loadedBktMgr, err := newBucketMgr(metaDir)
+	if err != nil {
+		t.Fatalf("failed to load bucket manager: %v", err)
+	}
+
+	checkBucketPolicy(loadedBktMgr, "check on disk bucket manager")
+}
+
+func newTestBucketMgr() (bktMgr *bucketMgr, metaDir string, err error) {
+	metaDir, err = ioutil.TempDir("", "")
+	if err != nil {
+		return
+	}
+
+	bktMgr, err = newBucketMgr(metaDir)
+	if err != nil {
+		os.RemoveAll(metaDir)
+	}
+	return
+}
