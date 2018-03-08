@@ -184,7 +184,7 @@ func (fm *filemeta) readDir(bucket, dir string) (files []string, dirs []string, 
 
 	for _, f := range fios {
 		if f.IsDir() {
-			dirs = append(dirs, f.Name())
+			dirs = append(dirs, f.Name()+"/")
 		} else {
 			files = append(files, f.Name())
 		}
