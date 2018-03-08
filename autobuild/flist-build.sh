@@ -2,7 +2,7 @@
 set -ex
 
 apt-get update
-apt-get install wget -y
+apt-get install wget build-essential -y
 
 # make output directory
 mkdir -p /tmp/archives/
