@@ -1,7 +1,6 @@
 package zerostor
 
 import (
-	"errors"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -9,12 +8,6 @@ import (
 
 	"github.com/minio/minio-go/pkg/policy"
 	minio "github.com/minio/minio/cmd"
-)
-
-var (
-	// errDifPolicy returned when servers in the cluster
-	// doesn't have same policy
-	errDifPolicy = errors.New("cluster has different policy")
 )
 
 // bucketMgr defines the manager of this zerostor gateway's
