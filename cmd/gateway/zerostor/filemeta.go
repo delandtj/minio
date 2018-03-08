@@ -137,6 +137,12 @@ func (fm *filemeta) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 
 	// if dir, list the dir
 	if fi.Mode().IsDir() {
+		// when requesting for a dir, the prefix must
+		// ended with trailing slash
+		if prefix != "" && !strings.HasSuffix(prefix, "/") {
+			result.Prefixes = []string{prefix + "/"}
+			return
+		}
 		return fm.listDir(bucket, prefix)
 	}
 
@@ -156,7 +162,11 @@ func (fm *filemeta) listDir(bucket, dir string) (result minio.ListObjectsInfo, e
 		return
 	}
 
-	result.Prefixes = dirs
+	for _, d := range dirs {
+		result.Prefixes = append(result.Prefixes,
+			filepath.Join(dir, d)+"/") // directory dirent must ended with "/" to be shown properly in web UI
+	}
+
 	for _, f := range files {
 		var md *metatypes.Metadata
 
@@ -167,7 +177,7 @@ func (fm *filemeta) listDir(bucket, dir string) (result minio.ListObjectsInfo, e
 			return
 		}
 		result.Objects = append(result.Objects,
-			createObjectInfo(bucket, f, md))
+			createObjectInfo(bucket, filepath.Join(dir, f), md))
 	}
 	return
 }
@@ -184,7 +194,7 @@ func (fm *filemeta) readDir(bucket, dir string) (files []string, dirs []string, 
 
 	for _, f := range fios {
 		if f.IsDir() {
-			dirs = append(dirs, f.Name()+"/")
+			dirs = append(dirs, f.Name())
 		} else {
 			files = append(files, f.Name())
 		}
