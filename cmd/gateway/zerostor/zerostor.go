@@ -22,7 +22,6 @@ import (
 // zerostor defines 0-stor storage
 type zerostor struct {
 	storCli  zstorClient
-	metaCli  *metastor.Client // TODO : remove this field
 	bktMgr   *bucketMgr
 	filemeta *filemeta
 }
@@ -57,7 +56,6 @@ func newZerostor(cfg client.Config, metaDir string) (*zerostor, error) {
 
 	return &zerostor{
 		storCli:  cli,
-		metaCli:  metaCli,
 		filemeta: fm,
 		bktMgr:   bktMgr,
 	}, nil
@@ -81,7 +79,7 @@ func (zc *zerostor) get(bucket, object string, writer io.Writer, offset, length 
 
 // getMeta get metadata of the given bucket-object
 func (zc *zerostor) getMeta(bucket, object string) (*metatypes.Metadata, error) {
-	return zc.metaCli.GetMetadata(zc.toZstorKey(bucket, object))
+	return zc.filemeta.getDecodeMeta(zc.toZstorKey(bucket, object))
 }
 
 // del deletes the object
@@ -107,9 +105,7 @@ func (zc *zerostor) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 
 // Close closes the this 0-stor client
 func (zc *zerostor) Close() error {
-	zc.metaCli.Close()
-	zc.storCli.Close()
-	return nil
+	return zc.storCli.Close()
 }
 
 // bucketExist checks if the given bucket is exist
