@@ -9,8 +9,6 @@ import (
 	"path/filepath"
 
 	minio "github.com/minio/minio/cmd"
-	"github.com/minio/minio/pkg/errors"
-
 	"github.com/zero-os/0-stor/client"
 	"github.com/zero-os/0-stor/client/datastor"
 	"github.com/zero-os/0-stor/client/datastor/pipeline"
@@ -77,30 +75,9 @@ func (zc *zstorClient) write(bucket, object string, rd io.Reader) (*metatypes.Me
 }
 
 // get get object and write it to the given writer
-func (zc *zstorClient) get(bucket, object string, writer io.Writer, length int64) error {
-	if !zc.bucketExist(bucket) {
-		return minio.BucketNotFound{}
-	}
-
+func (zc *zstorClient) get(bucket, object string, writer io.Writer, offset, length int64) error {
 	key := zc.toZstorKey(bucket, object)
-
-	// get meta
-	// we need to get meta first instead of using client.Read directly
-	// because 0-stor client still can't support offset & length when reading object
-	// https://github.com/zero-os/0-stor/issues/499
-	// this will cause issue if object length different than requested length
-	md, err := zc.metaCli.GetMetadata(key)
-	if err != nil {
-		return err
-	}
-
-	if length >= 0 && md.Size != length {
-		// TODO : return proper error
-		log.Println("\t unsupported, object length != requested length")
-		return errors.Trace(minio.NotImplemented{})
-	}
-
-	return zc.storCli.ReadWithMeta(*md, writer)
+	return zc.storCli.ReadRange(key, writer, offset, length)
 }
 
 // getMeta get metadata of the given bucket-object

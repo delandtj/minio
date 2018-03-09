@@ -268,16 +268,8 @@ func (zo *zerostorObjects) CopyObject(srcBucket, srcObject, destBucket, destObje
 
 func (zo *zerostorObjects) GetObject(bucket, object string, startOffset int64, length int64,
 	writer io.Writer, etag string) error {
-
-	// TODO : handle etag, length, offset
-
-	// we don't support start offset
-	if startOffset != 0 {
-		log.Println("\t GetObject failed, unsupported startOffset != 0 = ", startOffset)
-		return errors.Trace(minio.NotImplemented{})
-	}
-
-	err := zo.zstorCli.get(bucket, object, writer, length)
+	// TODO : handle etag
+	err := zo.zstorCli.get(bucket, object, writer, startOffset, length)
 	return zstorToObjectErr(errors.Trace(err), bucket, object)
 }
 
@@ -294,8 +286,8 @@ func (zo *zerostorObjects) GetObjectInfo(bucket, object string) (objInfo minio.O
 
 func (zo *zerostorObjects) ListObjects(bucket, prefix, marker, delimiter string,
 	maxKeys int) (result minio.ListObjectsInfo, err error) {
-	log.Printf("ListObjects bucket=%v, prefix=%v, marker=%v, delimiter=%v, maxKeys=%v\n",
-		bucket, prefix, marker, delimiter, maxKeys)
+	//log.Printf("ListObjects bucket=%v, prefix=%v, marker=%v, delimiter=%v, maxKeys=%v\n",
+	//	bucket, prefix, marker, delimiter, maxKeys)
 
 	// get objects
 	result, err = zo.zstorCli.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
