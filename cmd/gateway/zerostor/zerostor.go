@@ -19,17 +19,16 @@ import (
 	"github.com/zero-os/0-stor/client/processing"
 )
 
-// zstorClient defines 0-stor client for
-// zerostor minio gateway
-type zstorClient struct {
-	storCli  *client.Client
+// zerostor defines 0-stor storage
+type zerostor struct {
+	storCli  zstorClient
 	metaCli  *metastor.Client // TODO : remove this field
 	bktMgr   *bucketMgr
 	filemeta *filemeta
 }
 
-// newZstorClient creates new zstorClient object
-func newZstorClient(cfg client.Config, metaDir string) (*zstorClient, error) {
+// newZerostor creates new zerostor object
+func newZerostor(cfg client.Config, metaDir string) (*zerostor, error) {
 	// creates bucket manager
 	bktMgr, err := newBucketMgr(metaDir)
 	if err != nil {
@@ -56,7 +55,7 @@ func newZstorClient(cfg client.Config, metaDir string) (*zstorClient, error) {
 	// creates 0-stor cli
 	cli := client.NewClient(metaCli, dataPipeline)
 
-	return &zstorClient{
+	return &zerostor{
 		storCli:  cli,
 		metaCli:  metaCli,
 		filemeta: fm,
@@ -65,7 +64,7 @@ func newZstorClient(cfg client.Config, metaDir string) (*zstorClient, error) {
 }
 
 // write writes object from the given reader
-func (zc *zstorClient) write(bucket, object string, rd io.Reader) (*metatypes.Metadata, error) {
+func (zc *zerostor) write(bucket, object string, rd io.Reader) (*metatypes.Metadata, error) {
 	if !zc.bucketExist(bucket) {
 		return nil, minio.BucketNotFound{}
 	}
@@ -75,18 +74,18 @@ func (zc *zstorClient) write(bucket, object string, rd io.Reader) (*metatypes.Me
 }
 
 // get get object and write it to the given writer
-func (zc *zstorClient) get(bucket, object string, writer io.Writer, offset, length int64) error {
+func (zc *zerostor) get(bucket, object string, writer io.Writer, offset, length int64) error {
 	key := zc.toZstorKey(bucket, object)
 	return zc.storCli.ReadRange(key, writer, offset, length)
 }
 
 // getMeta get metadata of the given bucket-object
-func (zc *zstorClient) getMeta(bucket, object string) (*metatypes.Metadata, error) {
+func (zc *zerostor) getMeta(bucket, object string) (*metatypes.Metadata, error) {
 	return zc.metaCli.GetMetadata(zc.toZstorKey(bucket, object))
 }
 
 // del deletes the object
-func (zc *zstorClient) del(bucket, object string) error {
+func (zc *zerostor) del(bucket, object string) error {
 	if !zc.bucketExist(bucket) {
 		return minio.BucketNotFound{}
 	}
@@ -94,7 +93,7 @@ func (zc *zstorClient) del(bucket, object string) error {
 }
 
 // repair repairs an object
-func (zc *zstorClient) repair(bucket, object string) (*metatypes.Metadata, error) {
+func (zc *zerostor) repair(bucket, object string) (*metatypes.Metadata, error) {
 	if !zc.bucketExist(bucket) {
 		return nil, minio.BucketNotFound{}
 	}
@@ -102,25 +101,25 @@ func (zc *zstorClient) repair(bucket, object string) (*metatypes.Metadata, error
 }
 
 // ListObjects list object in a bucket
-func (zc *zstorClient) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (minio.ListObjectsInfo, error) {
+func (zc *zerostor) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (minio.ListObjectsInfo, error) {
 	return zc.filemeta.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
 }
 
 // Close closes the this 0-stor client
-func (zc *zstorClient) Close() error {
+func (zc *zerostor) Close() error {
 	zc.metaCli.Close()
 	zc.storCli.Close()
 	return nil
 }
 
 // bucketExist checks if the given bucket is exist
-func (zc *zstorClient) bucketExist(bucket string) bool {
+func (zc *zerostor) bucketExist(bucket string) bool {
 	_, ok := zc.bktMgr.get(bucket)
 	return ok
 }
 
 // toZstorKey generates 0-stor key from the given bucket/object
-func (zc *zstorClient) toZstorKey(bucket, object string) []byte {
+func (zc *zerostor) toZstorKey(bucket, object string) []byte {
 	return []byte(filepath.Join(bucket, object))
 }
 

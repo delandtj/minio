@@ -126,24 +126,24 @@ func (g *Zerostor) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, e
 		return nil, err
 	}
 
-	// creates 0-stor client wrapper
-	zstorCli, err := newZstorClient(*storCfg, g.metaDir)
+	// creates 0-stor  wrapper
+	zstor, err := newZerostor(*storCfg, g.metaDir)
 	if err != nil {
 		log.Println("new zstor client: ", err.Error())
 		return nil, err
 	}
 
 	return &zerostorObjects{
-		zstorCli: zstorCli,
-		bktMgr:   zstorCli.bktMgr,
+		zstor:  zstor,
+		bktMgr: zstor.bktMgr,
 	}, nil
 }
 
 type zerostorObjects struct {
 	minio.GatewayUnsupported
-	mux      sync.RWMutex
-	zstorCli *zstorClient
-	bktMgr   *bucketMgr
+	mux    sync.RWMutex
+	zstor  *zerostor
+	bktMgr *bucketMgr
 }
 
 func (zo *zerostorObjects) GetBucketInfo(bucket string) (bucketInfo minio.BucketInfo, err error) {
@@ -226,14 +226,14 @@ func (zo *zerostorObjects) DeleteBucketPolicy(bucket string) error {
 }
 
 func (zo *zerostorObjects) DeleteObject(bucket, object string) error {
-	err := zo.zstorCli.del(bucket, object)
+	err := zo.zstor.del(bucket, object)
 	return zstorToObjectErr(errors.Trace(err), bucket, object)
 }
 
 func (zo *zerostorObjects) CopyObject(srcBucket, srcObject, destBucket, destObject string, srcInfo minio.ObjectInfo) (objInfo minio.ObjectInfo, err error) {
 
 	// get meta of src object
-	srcMd, err := zo.zstorCli.getMeta(srcBucket, srcObject)
+	srcMd, err := zo.zstor.getMeta(srcBucket, srcObject)
 	if err != nil {
 		err = zstorToObjectErr(errors.Trace(err), srcBucket, srcObject)
 		return
@@ -253,10 +253,10 @@ func (zo *zerostorObjects) CopyObject(srcBucket, srcObject, destBucket, destObje
 
 	go func() {
 		defer pw.Close()
-		zo.zstorCli.storCli.ReadWithMeta(*srcMd, pw)
+		zo.zstor.storCli.ReadWithMeta(*srcMd, pw)
 	}()
 
-	dstMd, err := zo.zstorCli.write(destBucket, destObject, pr)
+	dstMd, err := zo.zstor.write(destBucket, destObject, pr)
 	if err != nil {
 		err = zstorToObjectErr(errors.Trace(err), destBucket, destObject)
 		return
@@ -269,13 +269,13 @@ func (zo *zerostorObjects) CopyObject(srcBucket, srcObject, destBucket, destObje
 func (zo *zerostorObjects) GetObject(bucket, object string, startOffset int64, length int64,
 	writer io.Writer, etag string) error {
 	// TODO : handle etag
-	err := zo.zstorCli.get(bucket, object, writer, startOffset, length)
+	err := zo.zstor.get(bucket, object, writer, startOffset, length)
 	return zstorToObjectErr(errors.Trace(err), bucket, object)
 }
 
 func (zo *zerostorObjects) GetObjectInfo(bucket, object string) (objInfo minio.ObjectInfo, err error) {
 	// get meta
-	md, err := zo.zstorCli.getMeta(bucket, object)
+	md, err := zo.zstor.getMeta(bucket, object)
 	if err != nil {
 		err = zstorToObjectErr(errors.Trace(err), bucket, object)
 		return
@@ -290,7 +290,7 @@ func (zo *zerostorObjects) ListObjects(bucket, prefix, marker, delimiter string,
 	//	bucket, prefix, marker, delimiter, maxKeys)
 
 	// get objects
-	result, err = zo.zstorCli.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
+	result, err = zo.zstor.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
 		err = zstorToObjectErr(errors.Trace(err), bucket)
 		return
@@ -301,7 +301,7 @@ func (zo *zerostorObjects) ListObjects(bucket, prefix, marker, delimiter string,
 
 func (zo *zerostorObjects) PutObject(bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
 	// write to 0-stor
-	md, err := zo.zstorCli.write(bucket, object, data)
+	md, err := zo.zstor.write(bucket, object, data)
 	if err != nil {
 		err = zstorToObjectErr(errors.Trace(err), bucket, object)
 		return
@@ -314,7 +314,7 @@ func (zo *zerostorObjects) PutObject(bucket, object string, data *hash.Reader, m
 func (zo *zerostorObjects) HealObject(bucket, object string, dryRun bool) (madmin.HealResultItem, error) {
 	log.Printf("healObject %v/%v dryRun=%v\n", bucket, object, dryRun)
 
-	md, err := zo.zstorCli.getMeta(bucket, object)
+	md, err := zo.zstor.getMeta(bucket, object)
 	if err != nil {
 		return madmin.HealResultItem{}, zstorToObjectErr(errors.Trace(err), bucket, object)
 	}
@@ -328,14 +328,14 @@ func (zo *zerostorObjects) HealObject(bucket, object string, dryRun bool) (madmi
 	}
 
 	if dryRun {
-		_, err = zo.zstorCli.storCli.CheckWithMeta(*md, false)
+		_, err = zo.zstor.storCli.CheckWithMeta(*md, false)
 		if err != nil {
 			return res, zstorToObjectErr(errors.Trace(err), bucket, object)
 		}
 		return res, nil
 	}
 
-	_, err = zo.zstorCli.repair(bucket, object)
+	_, err = zo.zstor.repair(bucket, object)
 	if err != nil {
 		return res, zstorToObjectErr(errors.Trace(err), bucket, object)
 	}
@@ -344,7 +344,7 @@ func (zo *zerostorObjects) HealObject(bucket, object string, dryRun bool) (madmi
 }
 
 func (zo *zerostorObjects) Shutdown() error {
-	return zo.zstorCli.Close()
+	return zo.zstor.Close()
 }
 
 func (zo *zerostorObjects) StorageInfo() (info minio.StorageInfo) {
@@ -366,7 +366,7 @@ func createObjectInfo(bucket, object string, md *metatypes.Metadata) minio.Objec
 }
 
 func (zo *zerostorObjects) getBucket(name string) (*bucket, error) {
-	bkt, ok := zo.zstorCli.bktMgr.get(name)
+	bkt, ok := zo.bktMgr.get(name)
 	if !ok {
 		return nil, minio.BucketNotFound{}
 	}
@@ -374,7 +374,7 @@ func (zo *zerostorObjects) getBucket(name string) (*bucket, error) {
 }
 
 func (zo *zerostorObjects) getAllBuckets() []bucket {
-	return zo.zstorCli.bktMgr.getAllBuckets()
+	return zo.bktMgr.getAllBuckets()
 }
 
 // convert 0-stor error to minio error
