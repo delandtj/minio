@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	minio "github.com/minio/minio/cmd"
-	"github.com/zero-os/0-stor/client/metastor"
 	"github.com/zero-os/0-stor/client/metastor/db"
 	"github.com/zero-os/0-stor/client/metastor/encoding"
 	"github.com/zero-os/0-stor/client/metastor/metatypes"
@@ -31,8 +30,8 @@ type filemeta struct {
 	bucketDir  string // dir of buckets meta
 	bktMgr     *bucketMgr
 	objDir     string // dir of objects meta
-	metaCli    *metastor.Client
 	encodeFunc encoding.MarshalMetadata
+	decodeFunc encoding.UnmarshalMetadata
 }
 
 func newFilemeta(rootDir string, bktMgr *bucketMgr, marshalFuncPair *encoding.MarshalFuncPair) (*filemeta, error) {
@@ -47,6 +46,7 @@ func newFilemeta(rootDir string, bktMgr *bucketMgr, marshalFuncPair *encoding.Ma
 		objDir:     objDir,
 		bktMgr:     bktMgr,
 		encodeFunc: marshalFuncPair.Marshal,
+		decodeFunc: marshalFuncPair.Unmarshal,
 	}, nil
 }
 
@@ -147,7 +147,7 @@ func (fm *filemeta) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 	}
 
 	// if file, get metadata of this file
-	md, err := fm.metaCli.GetMetadata([]byte(prefix))
+	md, err := fm.getDecodeMeta([]byte(filepath.Join(bucket, prefix)))
 	if err != nil {
 		return
 	}
@@ -172,7 +172,7 @@ func (fm *filemeta) listDir(bucket, dir string) (result minio.ListObjectsInfo, e
 
 		key := filepath.Join(bucket, dir, f)
 
-		md, err = fm.metaCli.GetMetadata([]byte(key))
+		md, err = fm.getDecodeMeta([]byte(key))
 		if err != nil {
 			return
 		}
@@ -200,6 +200,19 @@ func (fm *filemeta) readDir(bucket, dir string) (files []string, dirs []string, 
 		}
 	}
 	return
+}
+
+// get the metadata and decode it
+func (fm *filemeta) getDecodeMeta(key []byte) (*metatypes.Metadata, error) {
+	rawMd, err := fm.Get([]byte(""), key)
+	if err != nil {
+		return nil, err
+	}
+
+	var md metatypes.Metadata
+
+	err = fm.decodeFunc(rawMd, &md)
+	return &md, err
 }
 
 func (fm *filemeta) getBucketName(key []byte) string {

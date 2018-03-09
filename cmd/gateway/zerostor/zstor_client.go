@@ -193,7 +193,6 @@ func createMestatorClient(cfg client.MetaStorConfig, bktMgr *bucketMgr, namespac
 	if len(cfg.Encryption.PrivateKey) == 0 {
 		// create potentially insecure metastor storage
 		mc, err = metastor.NewClient([]byte(namespace), metaCfg)
-		fm.metaCli = mc
 		return
 	}
 
@@ -213,6 +212,5 @@ func createMestatorClient(cfg client.MetaStorConfig, bktMgr *bucketMgr, namespac
 	// create our full-metaCfgured metastor client,
 	// including encryption support for our metadata in binary form
 	mc, err = metastor.NewClient([]byte(namespace), metaCfg)
-	fm.metaCli = mc
 	return
 }
