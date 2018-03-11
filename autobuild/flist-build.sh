@@ -15,10 +15,6 @@ mkdir -p /root/go
 export GOPATH=/root/go
 export PATH=$PATH:/usr/local/go/bin:$GOPATH/go/bin
 
-# checking branch (debug)
-cd /minio
-git status
-
 # install minio
 mkdir -p  /root/go/src/github.com/minio
 mv /minio /root/go/src/github.com/minio/minio
