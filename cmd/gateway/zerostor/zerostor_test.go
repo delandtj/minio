@@ -65,14 +65,19 @@ func TestZerostorRoundTrip(t *testing.T) {
 }
 
 func newTestZerostor(namespace, bucket string) (*zerostor, func(), error) {
-	fm, fmCleanup, err := newTestFilemeta(bucket)
+	zstorCli, cleanup, err := newTestInMemZstorClient(namespace)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = zstorCli.filemeta.bktMgr.createBucket(bucket)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	return &zerostor{
-		bktMgr:   fm.bktMgr,
-		filemeta: fm,
-		storCli:  newInMemZstorClient(namespace),
-	}, fmCleanup, nil
+		bktMgr:   zstorCli.filemeta.bktMgr,
+		filemeta: zstorCli.filemeta,
+		storCli:  zstorCli,
+	}, cleanup, nil
 }
