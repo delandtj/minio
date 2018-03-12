@@ -143,7 +143,7 @@ func (fm *filemeta) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 			result.Prefixes = []string{prefix + "/"}
 			return
 		}
-		return fm.listDir(bucket, prefix)
+		return fm.listDir(bucket, prefix, marker, maxKeys)
 	}
 
 	// if file, get metadata of this file
@@ -156,8 +156,8 @@ func (fm *filemeta) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 	return
 }
 
-func (fm *filemeta) listDir(bucket, dir string) (result minio.ListObjectsInfo, err error) {
-	files, dirs, err := fm.readDir(bucket, dir)
+func (fm *filemeta) listDir(bucket, dir, marker string, maxKeys int) (result minio.ListObjectsInfo, err error) {
+	files, dirs, nextMarker, err := fm.readDir(bucket, dir, marker, maxKeys)
 	if err != nil {
 		return
 	}
@@ -179,10 +179,17 @@ func (fm *filemeta) listDir(bucket, dir string) (result minio.ListObjectsInfo, e
 		result.Objects = append(result.Objects,
 			createObjectInfo(bucket, filepath.Join(dir, f), md))
 	}
+
+	// set the marker
+	if len(result.Objects)+len(result.Prefixes) >= maxKeys {
+		result.NextMarker = filepath.Join(dir, nextMarker)
+		result.IsTruncated = true
+	}
+
 	return
 }
 
-func (fm *filemeta) readDir(bucket, dir string) (files []string, dirs []string, err error) {
+func (fm *filemeta) readDir(bucket, dir, marker string, maxKeys int) (files []string, dirs []string, nextMarker string, err error) {
 	absDir := filepath.Join(fm.objDir, bucket, dir)
 	fios, err := ioutil.ReadDir(absDir)
 	if err != nil {
@@ -192,12 +199,30 @@ func (fm *filemeta) readDir(bucket, dir string) (files []string, dirs []string, 
 		return
 	}
 
+	var (
+		afterMarker = marker == ""
+		numKeys     int
+	)
+	marker = filepath.Base(marker)
+
 	for _, f := range fios {
+		if numKeys == maxKeys {
+			return
+		}
+		if afterMarker == false {
+			if f.Name() == marker {
+				afterMarker = true
+			}
+			continue
+		}
+		numKeys++
+
 		if f.IsDir() {
 			dirs = append(dirs, f.Name())
 		} else {
 			files = append(files, f.Name())
 		}
+		nextMarker = f.Name()
 	}
 	return
 }
