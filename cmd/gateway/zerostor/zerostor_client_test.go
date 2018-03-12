@@ -70,7 +70,14 @@ func (zc *inMemZstorClient) ReadWithMeta(md metatypes.Metadata, w io.Writer) err
 	return err
 }
 
+func (zc *inMemZstorClient) Read(key []byte, w io.Writer) error {
+	return zc.readRange(key, w, 0, 0)
+}
+
 func (zc *inMemZstorClient) ReadRange(key []byte, w io.Writer, offset, length int64) error {
+	return zc.readRange(key, w, offset, length)
+}
+func (zc *inMemZstorClient) readRange(key []byte, w io.Writer, offset, length int64) error {
 	zc.mux.Lock()
 	defer zc.mux.Unlock()
 
@@ -79,7 +86,12 @@ func (zc *inMemZstorClient) ReadRange(key []byte, w io.Writer, offset, length in
 		return datastor.ErrKeyNotFound
 	}
 
-	_, err := io.Copy(w, bytes.NewReader(val.data[int(offset):int(offset+length)]))
+	var err error
+	if length != 0 {
+		_, err = io.Copy(w, bytes.NewReader(val.data[int(offset):int(offset+length)]))
+	} else {
+		_, err = io.Copy(w, bytes.NewReader(val.data))
+	}
 	return err
 }
 

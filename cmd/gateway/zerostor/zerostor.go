@@ -74,6 +74,9 @@ func (zc *zerostor) write(bucket, object string, rd io.Reader) (*metatypes.Metad
 // get get object and write it to the given writer
 func (zc *zerostor) get(bucket, object string, writer io.Writer, offset, length int64) error {
 	key := zc.toZstorKey(bucket, object)
+	if offset == 0 && length <= 0 {
+		return zc.storCli.Read(key, writer)
+	}
 	return zc.storCli.ReadRange(key, writer, offset, length)
 }
 

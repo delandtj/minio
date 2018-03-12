@@ -133,10 +133,13 @@ func (g *Zerostor) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, e
 		return nil, err
 	}
 
+	return newGatewayLayerWithZerostor(zstor), nil
+}
+func newGatewayLayerWithZerostor(zstor *zerostor) minio.ObjectLayer {
 	return &zerostorObjects{
 		zstor:  zstor,
 		bktMgr: zstor.bktMgr,
-	}, nil
+	}
 }
 
 type zerostorObjects struct {
@@ -300,8 +303,12 @@ func (zo *zerostorObjects) ListObjects(bucket, prefix, marker, delimiter string,
 }
 
 func (zo *zerostorObjects) PutObject(bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
+	return zo.putObject(bucket, object, data, metadata)
+}
+
+func (zo *zerostorObjects) putObject(bucket, object string, rd io.Reader, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
 	// write to 0-stor
-	md, err := zo.zstor.write(bucket, object, data)
+	md, err := zo.zstor.write(bucket, object, rd)
 	if err != nil {
 		err = zstorToObjectErr(errors.Trace(err), bucket, object)
 		return
