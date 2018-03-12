@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"io"
 	"io/ioutil"
+	"os"
 	"sync"
 	"time"
 
+	"github.com/zero-os/0-stor/client"
 	"github.com/zero-os/0-stor/client/datastor"
 	"github.com/zero-os/0-stor/client/datastor/pipeline/storage"
+	"github.com/zero-os/0-stor/client/metastor"
 	"github.com/zero-os/0-stor/client/metastor/metatypes"
 )
 
@@ -16,26 +19,22 @@ import (
 // it simply store the data in memory
 type inMemZstorClient struct {
 	namespace []byte
-	kv        map[string]inMemZstorClientData
+	metaCli   *metastor.Client
+	filemeta  *filemeta
+	kv        map[string][]byte
 	mux       sync.Mutex
 }
 
-type inMemZstorClientData struct {
-	data []byte
-	meta metatypes.Metadata
-}
-
-func newInMemZstorClient(namespace string) *inMemZstorClient {
+func newInMemZstorClient(namespace string, metaCli *metastor.Client, fm *filemeta) *inMemZstorClient {
 	return &inMemZstorClient{
 		namespace: []byte(namespace),
-		kv:        make(map[string]inMemZstorClientData),
+		metaCli:   metaCli,
+		filemeta:  fm,
+		kv:        make(map[string][]byte),
 	}
 }
 
 func (zc *inMemZstorClient) Write(key []byte, r io.Reader) (*metatypes.Metadata, error) {
-	zc.mux.Lock()
-	defer zc.mux.Unlock()
-
 	data, err := ioutil.ReadAll(r)
 	if err != nil {
 		return nil, err
@@ -50,11 +49,12 @@ func (zc *inMemZstorClient) Write(key []byte, r io.Reader) (*metatypes.Metadata,
 		LastWriteEpoch: epoch,
 	}
 
-	zc.kv[string(key)] = inMemZstorClientData{
-		data: data,
-		meta: md,
-	}
-	return &md, nil
+	zc.mux.Lock()
+	defer zc.mux.Unlock()
+
+	zc.kv[string(key)] = data
+
+	return &md, zc.metaCli.SetMetadata(md)
 }
 
 func (zc *inMemZstorClient) ReadWithMeta(md metatypes.Metadata, w io.Writer) error {
@@ -66,7 +66,7 @@ func (zc *inMemZstorClient) ReadWithMeta(md metatypes.Metadata, w io.Writer) err
 		return datastor.ErrKeyNotFound
 	}
 
-	_, err := io.Copy(w, bytes.NewReader(val.data))
+	_, err := io.Copy(w, bytes.NewReader(val))
 	return err
 }
 
@@ -88,9 +88,9 @@ func (zc *inMemZstorClient) readRange(key []byte, w io.Writer, offset, length in
 
 	var err error
 	if length != 0 {
-		_, err = io.Copy(w, bytes.NewReader(val.data[int(offset):int(offset+length)]))
+		_, err = io.Copy(w, bytes.NewReader(val[int(offset):int(offset+length)]))
 	} else {
-		_, err = io.Copy(w, bytes.NewReader(val.data))
+		_, err = io.Copy(w, bytes.NewReader(val))
 	}
 	return err
 }
@@ -101,6 +101,10 @@ func (zc *inMemZstorClient) Delete(key []byte) error {
 
 	if _, ok := zc.kv[string(key)]; !ok {
 		return datastor.ErrKeyNotFound
+	}
+
+	if err := zc.metaCli.DeleteMetadata(key); err != nil {
+		return err
 	}
 
 	delete(zc.kv, string(key))
@@ -121,13 +125,35 @@ func (zc *inMemZstorClient) Repair(key []byte) (*metatypes.Metadata, error) {
 	zc.mux.Lock()
 	defer zc.mux.Unlock()
 
-	val, ok := zc.kv[string(key)]
+	_, ok := zc.kv[string(key)]
 	if !ok {
 		return nil, datastor.ErrKeyNotFound
 	}
-	return &val.meta, nil
+
+	return zc.metaCli.GetMetadata(key)
 }
 
 func (zc *inMemZstorClient) Close() error {
 	return nil
+}
+
+func newTestInMemZstorClient(namespace string) (*inMemZstorClient, func(), error) {
+	metaDir, err := ioutil.TempDir("", "")
+	if err != nil {
+		return nil, nil, err
+	}
+	bktMgr, err := newBucketMgr(metaDir)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	fm, metaCli, err := createMestatorClient(client.MetaStorConfig{}, bktMgr, namespace, metaDir)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	cleanup := func() {
+		os.RemoveAll(metaDir)
+	}
+	return newInMemZstorClient(namespace, metaCli, fm), cleanup, nil
 }

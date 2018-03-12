@@ -206,11 +206,13 @@ func (zo *zerostorObjects) GetBucketPolicy(bucket string) (policy.BucketAccessPo
 func (zo *zerostorObjects) SetBucketPolicy(bucket string, policyInfo policy.BucketAccessPolicy) error {
 	policies := policy.GetPolicies(policyInfo.Statements, bucket)
 	// we currently only support one policy per bucket
-	supportedPrefix := bucket + "/*"
+	supportedPrefix := bucket + supportedBucketPolicyPrefix
+
 	if len(policies) != 1 {
 		log.Println("SetBucketPolicy unsupported error: setting with multiple policies")
 		return errors.Trace(minio.NotImplemented{})
 	}
+
 	pol, ok := policies[supportedPrefix]
 	if !ok {
 		log.Println("SetBucketPolicy unsupported prefix")
@@ -439,3 +441,7 @@ func zstorToObjectErr(err error, params ...string) error {
 func zstorEpochToTimestamp(epoch int64) time.Time {
 	return time.Unix(epoch/1e9, epoch%1e9)
 }
+
+const (
+	supportedBucketPolicyPrefix = "/*"
+)
