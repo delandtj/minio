@@ -26,6 +26,7 @@ const (
 	zerostorBackend         = "zerostor"
 	minioZstorConfigFileVar = "MINIO_ZEROSTOR_CONFIG_FILE"
 	minioZstorMetaDirVar    = "MINIO_ZEROSTOR_META_DIR"
+	minioZstorDebug         = "MINIO_ZEROSTOR_DEBUG"
 )
 
 var (
@@ -34,7 +35,8 @@ var (
 )
 
 var (
-	log = minio.NewLogger()
+	log       = minio.NewLogger()
+	debugFlag = false
 )
 
 func init() {
@@ -60,7 +62,8 @@ ENVIRONMENT VARIABLES:
      MINIO_UPDATE: To turn off in-place upgrades, set this value to "off".
 
   ` + minioZstorConfigFileVar + `  Zerostor config file(default : $MINIO_CONFIG_DIR/zerostor.yaml)
-  ` + minioZstorMetaDirVar + `  Zerostor metadata directory(default : $MINIO_CONFIG_DIR/zerostor_meta)
+  ` + minioZstorMetaDirVar + `     Zerostor metadata directory(default : $MINIO_CONFIG_DIR/zerostor_meta)
+  ` + minioZstorDebug + `        Zerostor debug flag. Set to "1" to enable debugging (default : 0)
 
 EXAMPLES:
   1. Start minio gateway server for 0-stor Storage backend.
@@ -77,6 +80,8 @@ EXAMPLES:
 		CustomHelpTemplate: zerostorGatewayTemplate,
 		HideHelpCommand:    true,
 	})
+
+	debugFlag = os.Getenv("MINIO_ZEROSTOR_DEBUG") == "1"
 }
 
 // Handler for 'minio gateway zerostor' command line.
@@ -119,6 +124,7 @@ func (g *Zerostor) Production() bool {
 func (g *Zerostor) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
 	// check options
 	log.Println("zerostor config file = ", g.confFile)
+	log.Println("debugging flag: ", debugFlag)
 
 	// read zerostor config
 	storCfg, err := client.ReadConfig(g.confFile)
@@ -147,6 +153,7 @@ type zerostorObjects struct {
 	mux    sync.RWMutex
 	zstor  *zerostor
 	bktMgr *bucketMgr
+	debug  bool
 }
 
 func (zo *zerostorObjects) GetBucketInfo(bucket string) (bucketInfo minio.BucketInfo, err error) {
@@ -273,6 +280,9 @@ func (zo *zerostorObjects) CopyObject(srcBucket, srcObject, destBucket, destObje
 
 func (zo *zerostorObjects) GetObject(bucket, object string, startOffset int64, length int64,
 	writer io.Writer, etag string) error {
+	debugf("GetObject bucket:%v, object:%v, offset:%v, length:%v, etag:%v\n",
+		bucket, object, startOffset, length, etag)
+
 	// TODO : handle etag
 	err := zo.zstor.get(bucket, object, writer, startOffset, length)
 	return zstorToObjectErr(errors.Trace(err), bucket, object)
@@ -291,8 +301,8 @@ func (zo *zerostorObjects) GetObjectInfo(bucket, object string) (objInfo minio.O
 
 func (zo *zerostorObjects) ListObjects(bucket, prefix, marker, delimiter string,
 	maxKeys int) (result minio.ListObjectsInfo, err error) {
-	//log.Printf("ListObjects bucket=%v, prefix=%v, marker=%v, delimiter=%v, maxKeys=%v\n",
-	//	bucket, prefix, marker, delimiter, maxKeys)
+	debugf("ListObjects bucket:%v, prefix:%v, marker:%v, delimiter:%v, maxKeys:%v\n",
+		bucket, prefix, marker, delimiter, maxKeys)
 
 	// get objects
 	result, err = zo.zstor.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
@@ -305,6 +315,7 @@ func (zo *zerostorObjects) ListObjects(bucket, prefix, marker, delimiter string,
 }
 
 func (zo *zerostorObjects) PutObject(bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
+	debugf("PutObject bucket:%v, object:%v, metadata:%v\n", bucket, object, metadata)
 	return zo.putObject(bucket, object, data, metadata)
 }
 
@@ -384,6 +395,18 @@ func (zo *zerostorObjects) getBucket(name string) (*bucket, error) {
 
 func (zo *zerostorObjects) getAllBuckets() []bucket {
 	return zo.bktMgr.getAllBuckets()
+}
+
+func debugf(format string, args ...interface{}) {
+	if debugFlag {
+		log.Printf(format, args...)
+	}
+}
+
+func debugln(args ...interface{}) {
+	if debugFlag {
+		log.Println(args...)
+	}
 }
 
 // convert 0-stor error to minio error
