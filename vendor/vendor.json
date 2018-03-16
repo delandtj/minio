@@ -687,8 +687,8 @@
 		{
 			"checksumSHA1": "K8DLaFfv2T5CPYEDSdilbWfMLP4=",
 			"path": "github.com/zero-os/0-stor/client",
-			"revision": "7ab726022e879aa4012b6a160a018383f6938166",
-			"revisionTime": "2018-03-08T16:38:09Z",
+			"revision": "6f3e9fa2d2b714613eaacca7841ca4ee9a588c2a",
+			"revisionTime": "2018-03-16T18:22:48Z",
 			"version": "dev-tft-launch",
 			"versionExact": "dev-tft-launch"
 		},
@@ -725,10 +725,10 @@
 			"versionExact": "dev-tft-launch"
 		},
 		{
-			"checksumSHA1": "W5a8XSZOWVmwrukuGcrFZWOOLRo=",
+			"checksumSHA1": "fAjyTIClRLvZvhaIgZZPd7zGwxM=",
 			"path": "github.com/zero-os/0-stor/client/datastor/zerodb",
-			"revision": "7ab726022e879aa4012b6a160a018383f6938166",
-			"revisionTime": "2018-03-08T16:38:09Z",
+			"revision": "6f3e9fa2d2b714613eaacca7841ca4ee9a588c2a",
+			"revisionTime": "2018-03-16T18:22:48Z",
 			"version": "dev-tft-launch",
 			"versionExact": "dev-tft-launch"
 		},
