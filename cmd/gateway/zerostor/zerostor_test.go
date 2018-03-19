@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/zero-os/0-stor/client/datastor"
+	"github.com/zero-os/0-stor/client/metastor"
 )
 
 // Test roundtrip: get set delete
@@ -30,7 +31,7 @@ func TestZerostorRoundTrip(t *testing.T) {
 	// make sure the object is not exist yet
 	buf := bytes.NewBuffer(nil)
 	err = zstor.get(bucket, object, buf, 0, dataLen)
-	if err != datastor.ErrKeyNotFound {
+	if err != metastor.ErrNotFound {
 		t.Fatalf("expect error: %v, got: %v", datastor.ErrKeyNotFound, err)
 	}
 	buf.Reset()
@@ -58,7 +59,7 @@ func TestZerostorRoundTrip(t *testing.T) {
 
 	// make sure the object is not exist anymore
 	err = zstor.get(bucket, object, buf, 0, dataLen)
-	if err != datastor.ErrKeyNotFound {
+	if err != metastor.ErrNotFound {
 		t.Fatalf("expect error: %v, got: %v", datastor.ErrKeyNotFound, err)
 	}
 
