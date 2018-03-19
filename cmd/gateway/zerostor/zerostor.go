@@ -14,6 +14,7 @@ import (
 	"github.com/zero-os/0-stor/client/datastor/pipeline"
 	"github.com/zero-os/0-stor/client/datastor/zerodb"
 	"github.com/zero-os/0-stor/client/metastor"
+	"github.com/zero-os/0-stor/client/metastor/db"
 	"github.com/zero-os/0-stor/client/metastor/encoding"
 	"github.com/zero-os/0-stor/client/metastor/metatypes"
 	"github.com/zero-os/0-stor/client/processing"
@@ -106,7 +107,24 @@ func (zc *zerostor) del(bucket, object string) error {
 	if !zc.bucketExist(bucket) {
 		return minio.BucketNotFound{}
 	}
-	return zc.storCli.Delete(zc.toZstorKey(bucket, object))
+
+	// get meta first, because it doesn't
+	// return error when the object is not exist
+	md, err := zc.getMeta(bucket, object)
+	if err != nil {
+		if err == db.ErrNotFound {
+			return nil
+		}
+		return err
+	}
+
+	if err := zc.storCli.DeleteWithMeta(*md); err == nil {
+		return nil
+	}
+
+	// if the deletion failed, we still need to cleanup
+	// the metadata.
+	return zc.filemeta.Delete(nil, zc.toZstorKey(bucket, object))
 }
 
 // repair repairs an object
