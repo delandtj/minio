@@ -13,7 +13,7 @@ type zstorClient interface {
 	ReadWithMeta(meta metatypes.Metadata, w io.Writer) error
 	ReadRange(key []byte, w io.Writer, offset, length int64) error
 	Read(key []byte, w io.Writer) error
-	Delete(key []byte) error
+	DeleteWithMeta(md metatypes.Metadata) error
 	CheckWithMeta(meta metatypes.Metadata, fast bool) (storage.CheckStatus, error)
 	Repair(key []byte) (*metatypes.Metadata, error)
 	Close() error

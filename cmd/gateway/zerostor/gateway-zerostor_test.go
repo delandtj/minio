@@ -136,7 +136,35 @@ func TestGatewayObjectRoundTrip(t *testing.T) {
 	// make sure the object is not exist anymore
 	err = zo.GetObject(bucket, object, 0, 0, bytes.NewBuffer(nil), "")
 	if err == nil {
-		t.Fatalf("unexpected error=nil when deleting non existed object")
+		t.Fatalf("unexpected error=nil when getting non existed object")
+	}
+}
+
+// Test Deleting non existant object.
+// it shouldn't return error
+func TestDeleteNotExistObject(t *testing.T) {
+	const (
+		namespace = "ns"
+		bucket    = "buket"
+		object    = "object"
+		dataLen   = 4096
+	)
+	zo, cleanup, err := newZstorGateway(namespace, bucket)
+	if err != nil {
+		t.Fatalf("failed to create gateway:%v", err)
+	}
+	defer cleanup()
+
+	// make sure the object not exist
+	err = zo.GetObject(bucket, object, 0, 0, bytes.NewBuffer(nil), "")
+	if err == nil {
+		t.Fatalf("unexpected error=nil when getting non existed object")
+	}
+
+	// delete object
+	err = zo.DeleteObject(bucket, object)
+	if err != nil {
+		t.Fatalf("deleting non existant object should not return error, got: %v", err)
 	}
 }
 

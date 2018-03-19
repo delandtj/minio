@@ -95,10 +95,11 @@ func (zc *inMemZstorClient) readRange(key []byte, w io.Writer, offset, length in
 	return err
 }
 
-func (zc *inMemZstorClient) Delete(key []byte) error {
+func (zc *inMemZstorClient) DeleteWithMeta(md metatypes.Metadata) error {
 	zc.mux.Lock()
 	defer zc.mux.Unlock()
 
+	key := md.Key
 	if _, ok := zc.kv[string(key)]; !ok {
 		return datastor.ErrKeyNotFound
 	}
