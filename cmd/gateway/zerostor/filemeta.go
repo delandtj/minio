@@ -1,6 +1,7 @@
 package zerostor
 
 import (
+	"errors"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -15,6 +16,10 @@ import (
 var (
 	rootDirPerm  = os.FileMode(0755)
 	fileMetaPerm = os.FileMode(0644)
+)
+
+var (
+	errMaxKeyReached = errors.New("max keys reached")
 )
 
 const (
@@ -139,11 +144,11 @@ func (fm *filemeta) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 	if fi.Mode().IsDir() {
 		// when requesting for a dir, the prefix must
 		// ended with trailing slash
-		if prefix != "" && !strings.HasSuffix(prefix, "/") {
+		if prefix != "" && !strings.HasSuffix(prefix, "/") && delimiter != "" {
 			result.Prefixes = []string{prefix + "/"}
 			return
 		}
-		return fm.listDir(bucket, prefix, marker, maxKeys)
+		return fm.listDir(bucket, prefix, marker, delimiter, maxKeys)
 	}
 
 	// if file, get metadata of this file
@@ -156,8 +161,8 @@ func (fm *filemeta) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 	return
 }
 
-func (fm *filemeta) listDir(bucket, dir, marker string, maxKeys int) (result minio.ListObjectsInfo, err error) {
-	files, dirs, nextMarker, err := fm.readDir(bucket, dir, marker, maxKeys)
+func (fm *filemeta) listDir(bucket, dir, marker, delimiter string, maxKeys int) (result minio.ListObjectsInfo, err error) {
+	files, dirs, nextMarker, err := fm.readDir(bucket, dir, marker, delimiter, maxKeys)
 	if err != nil {
 		return
 	}
@@ -189,8 +194,14 @@ func (fm *filemeta) listDir(bucket, dir, marker string, maxKeys int) (result min
 	return
 }
 
-func (fm *filemeta) readDir(bucket, dir, marker string, maxKeys int) (files []string, dirs []string, nextMarker string, err error) {
+func (fm *filemeta) readDir(bucket, dir, marker, delimiter string, maxKeys int) (files []string, dirs []string, nextMarker string, err error) {
 	absDir := filepath.Join(fm.objDir, bucket, dir)
+
+	if delimiter == "" { // recursive list
+		files, nextMarker, err = fm.readDirRecursive(absDir, marker, maxKeys)
+		return
+	}
+
 	fios, err := ioutil.ReadDir(absDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -223,6 +234,56 @@ func (fm *filemeta) readDir(bucket, dir, marker string, maxKeys int) (files []st
 			files = append(files, f.Name())
 		}
 		nextMarker = f.Name()
+	}
+	return
+}
+
+func (fm *filemeta) readDirRecursive(absDir, marker string, maxKeys int) (files []string, nextMarker string, err error) {
+	var (
+		prefixToTrim = absDir
+		numKeys      int
+		afterMarker  = marker == ""
+	)
+	if !strings.HasSuffix(prefixToTrim, "/") {
+		prefixToTrim = prefixToTrim + "/"
+	}
+
+	err = filepath.Walk(absDir, func(path string, fi os.FileInfo, err error) error {
+		// stop the walk when getting err != nil
+		if err != nil {
+			return err
+		}
+
+		// stop the walk when reach the max keys
+		if numKeys == maxKeys {
+			return errMaxKeyReached
+		}
+
+		// ignore the dir
+		if fi.IsDir() {
+			return nil
+		}
+
+		// trim the path
+		relPath := strings.TrimPrefix(path, prefixToTrim)
+
+		// ignore entries before the `marker`
+		if afterMarker == false {
+			if relPath == marker {
+				afterMarker = true
+			}
+			return nil
+		}
+
+		numKeys++
+
+		files = append(files, relPath)
+
+		nextMarker = relPath
+		return nil
+	})
+	if err == errMaxKeyReached {
+		err = nil
 	}
 	return
 }
