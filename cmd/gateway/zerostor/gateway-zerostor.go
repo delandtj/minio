@@ -5,12 +5,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/pkg/policy"
 	minio "github.com/minio/minio/cmd"
+	"github.com/minio/minio/cmd/gateway/zerostor/multipart"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
@@ -139,21 +139,29 @@ func (g *Zerostor) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, e
 		return nil, err
 	}
 
-	return newGatewayLayerWithZerostor(zstor), nil
+	return newGatewayLayerWithZerostor(zstor)
 }
-func newGatewayLayerWithZerostor(zstor *zerostor) minio.ObjectLayer {
-	return &zerostorObjects{
-		zstor:  zstor,
-		bktMgr: zstor.bktMgr,
+func newGatewayLayerWithZerostor(zstor *zerostor) (minio.ObjectLayer, error) {
+	mpartMetaUploadMgr, err := newFilemetaUploadMgr(zstor.filemeta.rootDir)
+	if err != nil {
+		return nil, err
 	}
+
+	mpartMgr := multipart.NewManager(zstor, mpartMetaUploadMgr)
+
+	return &zerostorObjects{
+		zstor:        zstor,
+		bktMgr:       zstor.bktMgr,
+		multipartMgr: mpartMgr,
+	}, nil
 }
 
 type zerostorObjects struct {
 	minio.GatewayUnsupported
-	mux    sync.RWMutex
-	zstor  *zerostor
-	bktMgr *bucketMgr
-	debug  bool
+	zstor        *zerostor
+	bktMgr       *bucketMgr
+	multipartMgr multipart.Manager
+	debug        bool
 }
 
 func (zo *zerostorObjects) GetBucketInfo(bucket string) (bucketInfo minio.BucketInfo, err error) {
@@ -268,7 +276,7 @@ func (zo *zerostorObjects) CopyObject(srcBucket, srcObject, destBucket, destObje
 		zo.zstor.storCli.ReadWithMeta(*srcMd, pw)
 	}()
 
-	dstMd, err := zo.zstor.write(destBucket, destObject, pr)
+	dstMd, err := zo.zstor.Write(destBucket, destObject, pr)
 	if err != nil {
 		err = zstorToObjectErr(errors.Trace(err), destBucket, destObject)
 		return
@@ -284,7 +292,7 @@ func (zo *zerostorObjects) GetObject(bucket, object string, startOffset int64, l
 		bucket, object, startOffset, length, etag)
 
 	// TODO : handle etag
-	err := zo.zstor.get(bucket, object, writer, startOffset, length)
+	err := zo.zstor.Read(bucket, object, writer, startOffset, length)
 	return zstorToObjectErr(errors.Trace(err), bucket, object)
 }
 
@@ -321,7 +329,7 @@ func (zo *zerostorObjects) PutObject(bucket, object string, data *hash.Reader, m
 
 func (zo *zerostorObjects) putObject(bucket, object string, rd io.Reader, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
 	// write to 0-stor
-	md, err := zo.zstor.write(bucket, object, rd)
+	md, err := zo.zstor.Write(bucket, object, rd)
 	if err != nil {
 		err = zstorToObjectErr(errors.Trace(err), bucket, object)
 		return
