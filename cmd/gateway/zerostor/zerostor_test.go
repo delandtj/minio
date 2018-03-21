@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/zero-os/0-stor/client/datastor"
-	"github.com/zero-os/0-stor/client/metastor"
 )
 
 // Test roundtrip: get set delete
@@ -30,20 +29,20 @@ func TestZerostorRoundTrip(t *testing.T) {
 
 	// make sure the object is not exist yet
 	buf := bytes.NewBuffer(nil)
-	err = zstor.get(bucket, object, buf, 0, dataLen)
-	if err != metastor.ErrNotFound {
+	err = zstor.Read(bucket, object, buf, 0, dataLen)
+	if err != datastor.ErrKeyNotFound {
 		t.Fatalf("expect error: %v, got: %v", datastor.ErrKeyNotFound, err)
 	}
 	buf.Reset()
 
 	// set
-	_, err = zstor.write(bucket, object, bytes.NewReader(data))
+	_, err = zstor.Write(bucket, object, bytes.NewReader(data))
 	if err != nil {
 		t.Fatalf("write error: %v", err)
 	}
 
 	// get
-	err = zstor.get(bucket, object, buf, 0, dataLen)
+	err = zstor.Read(bucket, object, buf, 0, dataLen)
 	if err != nil {
 		t.Fatalf("read error: %v", err)
 	}
@@ -58,8 +57,8 @@ func TestZerostorRoundTrip(t *testing.T) {
 	}
 
 	// make sure the object is not exist anymore
-	err = zstor.get(bucket, object, buf, 0, dataLen)
-	if err != metastor.ErrNotFound {
+	err = zstor.Read(bucket, object, buf, 0, dataLen)
+	if err != datastor.ErrKeyNotFound {
 		t.Fatalf("expect error: %v, got: %v", datastor.ErrKeyNotFound, err)
 	}
 

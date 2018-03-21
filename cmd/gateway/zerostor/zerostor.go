@@ -62,8 +62,8 @@ func newZerostor(cfg client.Config, metaDir string) (*zerostor, error) {
 	}, nil
 }
 
-// write writes object from the given reader
-func (zc *zerostor) write(bucket, object string, rd io.Reader) (*metatypes.Metadata, error) {
+// Write writes object from the given reader
+func (zc *zerostor) Write(bucket, object string, rd io.Reader) (*metatypes.Metadata, error) {
 	if !zc.bucketExist(bucket) {
 		return nil, minio.BucketNotFound{}
 	}
@@ -72,8 +72,8 @@ func (zc *zerostor) write(bucket, object string, rd io.Reader) (*metatypes.Metad
 	return zc.storCli.Write(key, rd)
 }
 
-// get get object and write it to the given writer
-func (zc *zerostor) get(bucket, object string, writer io.Writer, offset, length int64) error {
+// Read reads object and write it to the given writer
+func (zc *zerostor) Read(bucket, object string, writer io.Writer, offset, length int64) error {
 	key := zc.toZstorKey(bucket, object)
 	if offset == 0 && length <= 0 {
 		debugln("\tGetObject using zerostor Read")
