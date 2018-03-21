@@ -74,27 +74,13 @@ func (zc *zerostor) write(bucket, object string, rd io.Reader) (*metatypes.Metad
 
 // get get object and write it to the given writer
 func (zc *zerostor) get(bucket, object string, writer io.Writer, offset, length int64) error {
-	if offset != 0 {
-		log.Println("get object failed, unsupported offset != 0 = ", offset)
-		return minio.NotImplemented{}
+	key := zc.toZstorKey(bucket, object)
+	if offset == 0 && length <= 0 {
+		debugln("\tGetObject using zerostor Read")
+		return zc.storCli.Read(key, writer)
 	}
-
-	// get meta
-	// we need to get meta first instead of using client.Read directly
-	// because 0-stor client still can't support offset & length when reading object
-	// https://github.com/zero-os/0-stor/issues/499
-	// this will cause issue if object length different than requested length
-	md, err := zc.getMeta(bucket, object)
-	if err != nil {
-		return err
-	}
-
-	if length >= 0 && md.Size != length {
-		log.Println("\t unsupported, object length != requested length")
-		return minio.NotImplemented{}
-	}
-
-	return zc.storCli.ReadWithMeta(*md, writer)
+	debugln("\tGetObject using zerostor ReadRange")
+	return zc.storCli.ReadRange(key, writer, offset, length)
 }
 
 // getMeta get metadata of the given bucket-object
