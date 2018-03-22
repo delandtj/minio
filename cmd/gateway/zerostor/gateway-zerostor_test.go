@@ -316,7 +316,7 @@ func newZstorGateway(namespace, bucket string) (minio.ObjectLayer, func(), error
 	if err != nil {
 		return nil, nil, err
 	}
-	gl, err := newGatewayLayerWithZerostor(zstor)
+	gl, err := newGatewayLayerWithZerostor(zstor, zstor.filemeta.rootDir)
 
 	return gl, cleanupZstor, err
 }

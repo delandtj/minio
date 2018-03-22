@@ -28,9 +28,14 @@ type Manager interface {
 	// It do these things:
 	// - concantenates all parts and store it to non-temporary storage
 	// - delete all parts from temporary storage and clean the metadata
-	Complete(bucket, object, uploadID string, parts []minio.CompletePart) error
+	Complete(bucket, object, uploadID string, parts []minio.CompletePart) (*metatypes.Metadata, error)
 
+	// Abort the multipart upload process
+	// clean all temporary storage and metadata
 	Abort(bucket, object, uploadID string) error
+
+	// Close closes the manager
+	Close() error
 }
 
 // MetaManager represent metadata manager which handles
@@ -45,7 +50,7 @@ type MetaManager interface {
 
 	// ListPart returns all PartInfo for an uploadID
 	// sorted ascended by partID
-	ListPart(uploadID string) (map[int]PartInfo, error)
+	ListPart(uploadID string) ([]PartInfo, error)
 
 	// Clean cleans all metadata for an upload ID
 	Clean(uploadID string) error
@@ -55,19 +60,35 @@ type MetaManager interface {
 // parts of multipart upload
 type Storage interface {
 	Write(bucket, object string, rd io.Reader) (*metatypes.Metadata, error)
-	Read(bucket, object string, writer io.Writer, offset, length int64) error
+	Read(bucket, object string, writer io.Writer) error
+	Delete(bucket, object string) error
 }
 
 // PartInfo represent info/metadata of an uploaded part
 type PartInfo struct {
-	ZstorKey string
+	Object string // object name in 0-stor
 	minio.PartInfo
 }
 
-// NewManager creates new default multipart manager
-func NewManager(stor Storage, metaMgr MetaManager) Manager {
-	return &zstorMultipartMgr{
-		stor: stor,
-		mm:   metaMgr,
+// PartInfoByPartNumber implements sort.Interface
+type PartInfoByPartNumber []PartInfo
+
+func (a PartInfoByPartNumber) Len() int           { return len(a) }
+func (a PartInfoByPartNumber) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a PartInfoByPartNumber) Less(i, j int) bool { return a[i].PartNumber < a[j].PartNumber }
+
+// NewDefaultManager creates new default multipart manager
+func NewDefaultManager(stor Storage, metaDir string) (Manager, error) {
+	metaMgr, err := newFilemetaUploadMgr(metaDir)
+	if err != nil {
+		return nil, err
 	}
+
+	return NewManager(stor, metaMgr), nil
+}
+
+// NewManager creates new upload manager with given
+// Storage and MetaManager
+func NewManager(stor Storage, metaMgr MetaManager) Manager {
+	return newManager(stor, metaMgr)
 }
