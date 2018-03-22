@@ -13,14 +13,15 @@ import (
 // bucketMgr defines the manager of this zerostor gateway's
 // buckets
 type bucketMgr struct {
-	mux     sync.RWMutex
-	buckets map[string]*bucket // in memory bucket objects, for faster access
-	dir     string             // directory of the bucket metadata
-	objDir  string             // directory of the object metadata
+	mux            sync.RWMutex
+	buckets        map[string]*bucket // in memory bucket objects, for faster access
+	dir            string             // directory of the bucket metadata
+	objDir         string             // directory of the object metadata
+	specialBuckets []string           // special buckets, which should be hidden
 }
 
 // newBucketMgr creates new bucketMgr object
-func newBucketMgr(metaDir string) (*bucketMgr, error) {
+func newBucketMgr(metaDir string, specialBuckets ...string) (*bucketMgr, error) {
 	var (
 		buckets = make(map[string]*bucket)
 		dir     = filepath.Join(metaDir, metaBucketDir)
@@ -49,11 +50,27 @@ func newBucketMgr(metaDir string) (*bucketMgr, error) {
 	}
 
 	// creates zdb clients
-	return &bucketMgr{
-		buckets: buckets,
-		dir:     dir,
-		objDir:  filepath.Join(metaDir, metaObjectDir),
-	}, nil
+	mgr := &bucketMgr{
+		buckets:        buckets,
+		dir:            dir,
+		objDir:         filepath.Join(metaDir, metaObjectDir),
+		specialBuckets: specialBuckets,
+	}
+
+	// creates special bucket
+	for _, bucket := range specialBuckets {
+		if _, ok := mgr.get(bucket); ok {
+			continue
+		}
+
+		err = mgr.createBucket(bucket)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// create special buckets
+	return mgr, nil
 }
 
 // creates bucket
@@ -95,7 +112,9 @@ func (bm *bucketMgr) getAllBuckets() []bucket {
 
 	buckets := make([]bucket, 0, len(bm.buckets))
 	for _, bkt := range bm.buckets {
-		buckets = append(buckets, *bkt)
+		if !bm.isSpecialBucket(bkt.Name) {
+			buckets = append(buckets, *bkt)
+		}
 	}
 	return buckets
 }
@@ -120,4 +139,13 @@ func (bm *bucketMgr) setPolicy(bucket string, pol policy.BucketPolicy) error {
 
 	bkt.Policy = pol
 	return bkt.save()
+}
+
+func (bm *bucketMgr) isSpecialBucket(bucket string) bool {
+	for _, b := range bm.specialBuckets {
+		if b == bucket {
+			return true
+		}
+	}
+	return false
 }

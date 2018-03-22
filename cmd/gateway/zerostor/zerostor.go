@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	minio "github.com/minio/minio/cmd"
+	"github.com/minio/minio/cmd/gateway/zerostor/multipart"
 	"github.com/zero-os/0-stor/client"
 	"github.com/zero-os/0-stor/client/datastor"
 	"github.com/zero-os/0-stor/client/datastor/pipeline"
@@ -30,7 +31,7 @@ type zerostor struct {
 // newZerostor creates new zerostor object
 func newZerostor(cfg client.Config, metaDir string) (*zerostor, error) {
 	// creates bucket manager
-	bktMgr, err := newBucketMgr(metaDir)
+	bktMgr, err := newBucketMgr(metaDir, multipart.MultipartBucket)
 	if err != nil {
 		return nil, err
 	}
@@ -64,23 +65,19 @@ func newZerostor(cfg client.Config, metaDir string) (*zerostor, error) {
 
 // Write writes object from the given reader
 func (zc *zerostor) Write(bucket, object string, rd io.Reader) (*metatypes.Metadata, error) {
-	if !zc.bucketExist(bucket) {
-		return nil, minio.BucketNotFound{}
-	}
-
 	key := zc.toZstorKey(bucket, object)
 	return zc.storCli.Write(key, rd)
 }
 
 // Read reads object and write it to the given writer
-func (zc *zerostor) Read(bucket, object string, writer io.Writer, offset, length int64) error {
-	key := zc.toZstorKey(bucket, object)
-	if offset == 0 && length <= 0 {
-		debugln("\tGetObject using zerostor Read")
-		return zc.storCli.Read(key, writer)
-	}
-	debugln("\tGetObject using zerostor ReadRange")
-	return zc.storCli.ReadRange(key, writer, offset, length)
+func (zc *zerostor) Read(bucket, object string, writer io.Writer) error {
+	return zc.storCli.Read(zc.toZstorKey(bucket, object), writer)
+}
+
+// ReadRange reads object and write it to the given writer with specified
+// offset and length
+func (zc *zerostor) ReadRange(bucket, object string, writer io.Writer, offset, length int64) error {
+	return zc.storCli.ReadRange(zc.toZstorKey(bucket, object), writer, offset, length)
 }
 
 // getMeta get metadata of the given bucket-object
@@ -88,8 +85,8 @@ func (zc *zerostor) getMeta(bucket, object string) (*metatypes.Metadata, error) 
 	return zc.filemeta.getDecodeMeta(zc.toZstorKey(bucket, object))
 }
 
-// del deletes the object
-func (zc *zerostor) del(bucket, object string) error {
+// Delete deletes the object
+func (zc *zerostor) Delete(bucket, object string) error {
 	if !zc.bucketExist(bucket) {
 		return minio.BucketNotFound{}
 	}

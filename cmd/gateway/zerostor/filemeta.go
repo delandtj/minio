@@ -32,7 +32,6 @@ const (
 // github.com/zero-os/0-stor/client/metastor/db.DB interface
 type filemeta struct {
 	rootDir    string // meta root dir
-	bucketDir  string // dir of buckets meta
 	bktMgr     *bucketMgr
 	objDir     string // dir of objects meta
 	encodeFunc encoding.MarshalMetadata

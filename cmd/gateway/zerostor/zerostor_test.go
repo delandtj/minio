@@ -29,7 +29,7 @@ func TestZerostorRoundTrip(t *testing.T) {
 
 	// make sure the object is not exist yet
 	buf := bytes.NewBuffer(nil)
-	err = zstor.Read(bucket, object, buf, 0, dataLen)
+	err = zstor.ReadRange(bucket, object, buf, 0, dataLen)
 	if err != datastor.ErrKeyNotFound {
 		t.Fatalf("expect error: %v, got: %v", datastor.ErrKeyNotFound, err)
 	}
@@ -42,7 +42,7 @@ func TestZerostorRoundTrip(t *testing.T) {
 	}
 
 	// get
-	err = zstor.Read(bucket, object, buf, 0, dataLen)
+	err = zstor.ReadRange(bucket, object, buf, 0, dataLen)
 	if err != nil {
 		t.Fatalf("read error: %v", err)
 	}
@@ -51,13 +51,13 @@ func TestZerostorRoundTrip(t *testing.T) {
 	}
 
 	// delete
-	err = zstor.del(bucket, object)
+	err = zstor.Delete(bucket, object)
 	if err != nil {
 		t.Fatalf("delete data failed error: %v", err)
 	}
 
 	// make sure the object is not exist anymore
-	err = zstor.Read(bucket, object, buf, 0, dataLen)
+	err = zstor.ReadRange(bucket, object, buf, 0, dataLen)
 	if err != datastor.ErrKeyNotFound {
 		t.Fatalf("expect error: %v, got: %v", datastor.ErrKeyNotFound, err)
 	}
