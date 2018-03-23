@@ -62,7 +62,14 @@ func (fu *filemetaUploadMgr) AddPart(uploadID string, partID int, info PartInfo)
 	return gob.NewEncoder(f).Encode(info)
 }
 
+// DelPart implements MetaManager.DelPart
+func (fu *filemetaUploadMgr) DelPart(uploadID, etag string, partID int) error {
+	return os.Remove(fu.partFile(uploadID, etag, partID))
+}
+
+// ListPart implements MetaManager.ListPart
 func (fu *filemetaUploadMgr) ListPart(uploadID string) ([]PartInfo, error) {
+	// read from the uploadID dir
 	fis, err := ioutil.ReadDir(fu.uploadDir(uploadID))
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -76,6 +83,7 @@ func (fu *filemetaUploadMgr) ListPart(uploadID string) ([]PartInfo, error) {
 		infos     = make([]PartInfo, 0, len(fis))
 	)
 
+	// read-decode each file
 	for _, fi := range fis {
 		if fi.IsDir() { // should never happen
 			continue
@@ -87,18 +95,22 @@ func (fu *filemetaUploadMgr) ListPart(uploadID string) ([]PartInfo, error) {
 		infos = append(infos, info)
 	}
 
+	// sort it by part number
 	sort.Sort(PartInfoByPartNumber(infos))
 	return infos, err
 }
 
+// Clean implements MetaManager.Clean
 func (fu *filemetaUploadMgr) Clean(uploadID string) error {
 	return os.RemoveAll(fu.uploadDir(uploadID))
 }
 
+// Close implements MetaManager.Close
 func (fu *filemetaUploadMgr) Close() error {
 	return nil
 }
 
+// create unique upload ID
 func (fu *filemetaUploadMgr) createUploadID() (string, error) {
 	buf := make([]byte, uploadIDLen)
 
@@ -116,6 +128,7 @@ func (fu *filemetaUploadMgr) createUploadID() (string, error) {
 	return "", ErrCreateUploadID
 }
 
+// decode part info from the given part file
 func (fu *filemetaUploadMgr) decodePart(partFile string) (info PartInfo, err error) {
 	// open file
 	f, err := os.Open(partFile)
@@ -130,6 +143,7 @@ func (fu *filemetaUploadMgr) decodePart(partFile string) (info PartInfo, err err
 	return
 }
 
+// check whether the given upload ID already exist in the system
 func (fu *filemetaUploadMgr) checkUploadIDExist(uploadID string) bool {
 	_, err := os.Stat(fu.uploadDir(uploadID))
 	return !os.IsNotExist(err)

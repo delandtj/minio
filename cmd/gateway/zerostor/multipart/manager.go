@@ -35,6 +35,10 @@ func (m *manager) Init(bucket, object string) (string, error) {
 
 // UploadPart implements Manager.UploadPart
 func (m *manager) UploadPart(bucket, object, uploadID, etag string, partID int, rd io.Reader) (info minio.PartInfo, err error) {
+	if etag == "" {
+		err = minio.InvalidETag{}
+		return
+	}
 	partObject := m.objectName(uploadID, partID)
 
 	// stor the part to 0-stor server as temporary object
@@ -62,29 +66,27 @@ func (m *manager) UploadPart(bucket, object, uploadID, etag string, partID int, 
 
 // Complete implements Manager.Complete
 func (m *manager) Complete(bucket, object, uploadID string, parts []minio.CompletePart) (*metatypes.Metadata, error) {
-	storedInfos, err := m.metaMgr.ListPart(uploadID)
+	// get all  part info of this upload ID
+	storedInfos, err := m.getStoredInfo(uploadID)
 	if err != nil {
 		return nil, err
 	}
 
-	storRd, storWr := io.Pipe()
-	errCh := make(chan error, 1)
+	var (
+		// pipe to connect `reader` that download from temporary
+		// storage to `writer` that upload to permanent storage
+		storRd, storWr = io.Pipe()
+		errCh          = make(chan error, 1)
+	)
 
 	// read the data one by one and stream it to the writer
 	go func() {
 		defer storWr.Close()
 
 		for _, part := range parts {
-			info, ok := func() (PartInfo, bool) {
-				for _, si := range storedInfos {
-					if si.PartNumber == part.PartNumber && si.ETag == part.ETag {
-						return si, true
-					}
-				}
-				return PartInfo{}, false
-			}()
+			info, ok := storedInfos[part.ETag]
 			if !ok {
-				errCh <- nil
+				errCh <- minio.InvalidPart{}
 				return
 			}
 
@@ -96,10 +98,17 @@ func (m *manager) Complete(bucket, object, uploadID string, parts []minio.Comple
 
 			// delete the temporary object
 			if err := m.stor.Delete(MultipartBucket, info.Object); err != nil {
-				errCh <- err
-				return
+				// we don't return error here because we don't return error
+				// on failed deletion.
+				// Other tool should do garbage storage cleanup
+				continue
 			}
+			delete(storedInfos, part.ETag)
 
+			// we don't check the error here because
+			// we want to keep delete next part.
+			// another tools should do metadata cleanup
+			m.metaMgr.DelPart(uploadID, part.ETag, part.PartNumber)
 		}
 		errCh <- nil
 	}()
@@ -116,8 +125,22 @@ func (m *manager) Complete(bucket, object, uploadID string, parts []minio.Comple
 		return nil, err
 	}
 
+	// delete undeleted part
+	for _, info := range storedInfos {
+		if err = m.stor.Delete(MultipartBucket, info.Object); err == nil {
+			// we don't return error here because we don't return error
+			// on failed deletion.
+			// Other tool should do garbage storage cleanup
+
+			m.metaMgr.DelPart(uploadID, info.ETag, info.PartNumber)
+			// we don't check the error here because
+			// we want to keep delete next part.
+			// another tools should do metadata cleanup
+		}
+	}
+
 	// clean metadata
-	return md, m.metaMgr.Clean(uploadID)
+	return md, nil
 }
 
 // Abort implements Manager.Abort
@@ -129,15 +152,33 @@ func (m *manager) Abort(bucket, object, uploadID string) error {
 
 	for _, part := range parts {
 		if err := m.stor.Delete(MultipartBucket, part.Object); err != nil {
-			return err
+			// we don't return error because we want to delete next part.
+			// another tool shoudl do storage cleanup
+			continue
 		}
-
+		// we don't check the error here because
+		// we want to keep delete next part.
+		// another tools should do metadata cleanup
+		m.metaMgr.DelPart(uploadID, part.ETag, part.PartNumber)
 	}
-	return m.metaMgr.Clean(uploadID)
+	return nil
 }
 
+// Close implements Manager.Close
 func (m *manager) Close() error {
 	return nil
+}
+
+func (m *manager) getStoredInfo(uploadID string) (map[string]PartInfo, error) {
+	infoArr, err := m.metaMgr.ListPart(uploadID)
+	if err != nil {
+		return nil, err
+	}
+	infos := make(map[string]PartInfo, len(infoArr))
+	for _, info := range infoArr {
+		infos[info.ETag] = info
+	}
+	return infos, nil
 }
 
 func (m *manager) objectName(uploadID string, partID int) string {

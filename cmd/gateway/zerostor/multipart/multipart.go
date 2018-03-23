@@ -48,6 +48,9 @@ type MetaManager interface {
 	// AddPart add PartInfo to an upload ID
 	AddPart(uploadID string, partID int, info PartInfo) error
 
+	// Remove PartInfo with given etag & partID from an uploadID
+	DelPart(uploadID string, etag string, partID int) error
+
 	// ListPart returns all PartInfo for an uploadID
 	// sorted ascended by partID
 	ListPart(uploadID string) ([]PartInfo, error)
