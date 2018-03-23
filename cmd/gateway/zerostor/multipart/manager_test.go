@@ -22,40 +22,53 @@ func TestManagerComplete(t *testing.T) {
 	mgr, metaMgr, cleanup := newDefaultUploadMgr(t, stor)
 	defer cleanup()
 
-	// init
+	// Init multipart upload
 	uploadID, err := mgr.Init(bucket, object)
 	if err != nil {
 		t.Fatalf("mulipart upload failed: %v", err)
 	}
 
-	// add part
-	data := make([]byte, dataLen)
+	var (
+		data            = make([]byte, dataLen)
+		toCompleteParts []minio.CompletePart
+	)
 	rand.Read(data)
 
+	// UploadPart
+	// add parts which we want to complete later
+	for i := 0; i < dataLen/partSize; i++ {
+		dataPart := data[i*partSize : (i+1)*partSize]
+		etag := minio.GenETag()
+		partNumber := i
+
+		_, err := mgr.UploadPart(bucket, object, uploadID, etag, partNumber, bytes.NewReader(dataPart))
+		if err != nil {
+			t.Fatalf("failed to upload part: %v, err: %v", i, err)
+		}
+		toCompleteParts = append(toCompleteParts, minio.CompletePart{
+			ETag:       etag,
+			PartNumber: partNumber,
+		})
+	}
+
+	// add invalid parts
 	for i := 0; i < dataLen/partSize; i++ {
 		dataPart := data[i*partSize : (i+1)*partSize]
 
-		_, err := mgr.UploadPart(bucket, object, uploadID, "", i, bytes.NewReader(dataPart))
+		_, err := mgr.UploadPart(bucket, object, uploadID, minio.GenETag(), i, bytes.NewReader(dataPart))
 		if err != nil {
 			t.Fatalf("failed to upload part: %v, err: %v", i, err)
 		}
 	}
 
-	// get parts info
-	parts, err := metaMgr.ListPart(uploadID)
+	// all parts that should be deleted
+	deletedParts, err := metaMgr.ListPart(uploadID)
 	if err != nil {
 		t.Fatalf("failed to list part :%v", err)
 	}
 
-	// CompletePart
-	var completeParts []minio.CompletePart
-	for _, part := range parts {
-		completeParts = append(completeParts, minio.CompletePart{
-			ETag:       part.ETag,
-			PartNumber: part.PartNumber,
-		})
-	}
-	_, err = mgr.Complete(bucket, object, uploadID, completeParts)
+	// `Complete` Part
+	_, err = mgr.Complete(bucket, object, uploadID, toCompleteParts)
 
 	// verify data uploaded
 	uploadedBuf := bytes.NewBuffer(nil)
@@ -68,8 +81,8 @@ func TestManagerComplete(t *testing.T) {
 		t.Fatalf("uploaded buf is not valid")
 	}
 
-	// verify data parts deleted
-	for _, part := range parts {
+	// verify all data parts are deleted
+	for _, part := range deletedParts {
 		buf := bytes.NewBuffer(nil)
 		err = stor.Read(MultipartBucket, part.Object, buf)
 		if err != datastor.ErrKeyNotFound {
@@ -103,7 +116,7 @@ func TestManagerAbort(t *testing.T) {
 	for i := 0; i < dataLen/partSize; i++ {
 		dataPart := data[i*partSize : (i+1)*partSize]
 
-		_, err := mgr.UploadPart(bucket, object, uploadID, "", i, bytes.NewReader(dataPart))
+		_, err := mgr.UploadPart(bucket, object, uploadID, minio.GenETag(), i, bytes.NewReader(dataPart))
 		if err != nil {
 			t.Fatalf("failed to upload part: %v, err: %v", i, err)
 		}
