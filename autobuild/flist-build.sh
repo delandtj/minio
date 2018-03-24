@@ -2,7 +2,7 @@
 set -ex
 
 apt-get update
-apt-get install wget build-essential -y
+apt-get install git wget build-essential -y
 
 # make output directory
 ARCHIVE=/tmp/archives
@@ -20,7 +20,7 @@ export PATH=$PATH:/usr/local/go/bin:$GOPATH/go/bin
 
 # install minio
 mkdir -p  /root/go/src/github.com/minio
-mv /minio /root/go/src/github.com/minio/minio
+cp -ar /minio /root/go/src/github.com/minio/minio
 pushd /root/go/src/github.com/minio/minio
 make build
 mv minio $FLIST/bin
