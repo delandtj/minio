@@ -141,50 +141,61 @@ func TestListObjects(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name   string
-		prefix string
-		dirs   []string
-		files  []string
+		name      string
+		prefix    string
+		dirs      []string
+		files     []string
+		delimiter string
 	}{
 		{
-			name:   "list objects of bucket",
-			prefix: "",
-			dirs:   []string{"firstdir/", "anotherdir/"},
-			files:  []string{"file1", "file2"},
+			name:      "list objects of bucket",
+			prefix:    "",
+			dirs:      []string{"firstdir/", "anotherdir/"},
+			files:     []string{"file1", "file2"},
+			delimiter: "/",
 		},
 		{
-			name:   "list of objects in dir",
-			prefix: "firstdir/",
-			dirs:   []string{"firstdir/seconddir/"},
-			files:  []string{"firstdir/file1", "firstdir/file2"},
+			name:      "list of objects in dir",
+			prefix:    "firstdir/",
+			dirs:      []string{"firstdir/seconddir/"},
+			files:     []string{"firstdir/file1", "firstdir/file2"},
+			delimiter: "/",
 		},
 		{
-			name:   "list of objects in subdir",
-			prefix: "firstdir/seconddir/",
-			files:  []string{"firstdir/seconddir/file1", "firstdir/seconddir/file2"},
+			name:      "list of objects in subdir",
+			prefix:    "firstdir/seconddir/",
+			files:     []string{"firstdir/seconddir/file1", "firstdir/seconddir/file2"},
+			delimiter: "/",
 		},
 
 		{
-			name:   "prefix = dir without trailing slash, return that dir",
-			prefix: "firstdir",
-			dirs:   []string{"firstdir/"},
+			name:      "prefix = dir without trailing slash, return that dir",
+			prefix:    "firstdir",
+			dirs:      []string{"firstdir/"},
+			delimiter: "/",
 		},
 		{
-			name:   "for file, return only that file",
-			prefix: "file1",
-			files:  []string{"file1"},
+			name:      "for file, return only that file",
+			prefix:    "file1",
+			files:     []string{"file1"},
+			delimiter: "/",
+		},
+		{
+			name:      "Recursive",
+			prefix:    "",
+			files:     keys,
+			delimiter: "",
 		},
 	}
 
 	const (
-		marker    = ""
-		delimiter = "/"
-		maxKeys   = 1000
+		marker  = ""
+		maxKeys = 1000
 	)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			res, err := fm.ListObjects(bucket, tc.prefix, marker, delimiter, maxKeys)
+			res, err := fm.ListObjects(bucket, tc.prefix, marker, tc.delimiter, maxKeys)
 			if err != nil {
 				t.Errorf("failed to ListObject for prefix=%v: %v", tc.prefix, err)
 			}
