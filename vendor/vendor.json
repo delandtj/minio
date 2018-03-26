@@ -689,104 +689,104 @@
 		{
 			"checksumSHA1": "K8DLaFfv2T5CPYEDSdilbWfMLP4=",
 			"path": "github.com/zero-os/0-stor/client",
-			"revision": "ab29bd78c7827556b3d94c8a518f02dd1e89fc53",
-			"revisionTime": "2018-03-21T00:08:10Z",
+			"revision": "be54afa93229e27688b2387df5382e58ef41f135",
+			"revisionTime": "2018-03-23T18:47:53Z",
 			"version": "dev-tft-launch",
 			"versionExact": "dev-tft-launch"
 		},
 		{
 			"checksumSHA1": "h3Ba67JjP609h8tBvjugv42MAH4=",
 			"path": "github.com/zero-os/0-stor/client/datastor",
-			"revision": "ab29bd78c7827556b3d94c8a518f02dd1e89fc53",
-			"revisionTime": "2018-03-21T00:08:10Z",
+			"revision": "be54afa93229e27688b2387df5382e58ef41f135",
+			"revisionTime": "2018-03-23T18:47:53Z",
 			"version": "dev-tft-launch",
 			"versionExact": "dev-tft-launch"
 		},
 		{
-			"checksumSHA1": "onZbsr6Is3r4TXRsMkv8ox7360U=",
+			"checksumSHA1": "VzDjTkm6L54WPQdG/h9Q4WtjKiY=",
 			"path": "github.com/zero-os/0-stor/client/datastor/pipeline",
-			"revision": "ab29bd78c7827556b3d94c8a518f02dd1e89fc53",
-			"revisionTime": "2018-03-21T00:08:10Z",
+			"revision": "be54afa93229e27688b2387df5382e58ef41f135",
+			"revisionTime": "2018-03-23T18:47:53Z",
 			"version": "dev-tft-launch",
 			"versionExact": "dev-tft-launch"
 		},
 		{
 			"checksumSHA1": "318nsrDWxfJuEfJBOTPT22xNmSc=",
 			"path": "github.com/zero-os/0-stor/client/datastor/pipeline/crypto",
-			"revision": "ab29bd78c7827556b3d94c8a518f02dd1e89fc53",
-			"revisionTime": "2018-03-21T00:08:10Z",
+			"revision": "be54afa93229e27688b2387df5382e58ef41f135",
+			"revisionTime": "2018-03-23T18:47:53Z",
 			"version": "dev-tft-launch",
 			"versionExact": "dev-tft-launch"
 		},
 		{
 			"checksumSHA1": "wWMuUv2hpRau9FRLW+oIyyymbN8=",
 			"path": "github.com/zero-os/0-stor/client/datastor/pipeline/storage",
-			"revision": "ab29bd78c7827556b3d94c8a518f02dd1e89fc53",
-			"revisionTime": "2018-03-21T00:08:10Z",
+			"revision": "be54afa93229e27688b2387df5382e58ef41f135",
+			"revisionTime": "2018-03-23T18:47:53Z",
 			"version": "dev-tft-launch",
 			"versionExact": "dev-tft-launch"
 		},
 		{
 			"checksumSHA1": "fAjyTIClRLvZvhaIgZZPd7zGwxM=",
 			"path": "github.com/zero-os/0-stor/client/datastor/zerodb",
-			"revision": "ab29bd78c7827556b3d94c8a518f02dd1e89fc53",
-			"revisionTime": "2018-03-21T00:08:10Z",
+			"revision": "be54afa93229e27688b2387df5382e58ef41f135",
+			"revisionTime": "2018-03-23T18:47:53Z",
 			"version": "dev-tft-launch",
 			"versionExact": "dev-tft-launch"
 		},
 		{
 			"checksumSHA1": "G0UIFxhwXA2B/Q1t19uwBJcwAnE=",
 			"path": "github.com/zero-os/0-stor/client/metastor",
-			"revision": "ab29bd78c7827556b3d94c8a518f02dd1e89fc53",
-			"revisionTime": "2018-03-21T00:08:10Z",
+			"revision": "be54afa93229e27688b2387df5382e58ef41f135",
+			"revisionTime": "2018-03-23T18:47:53Z",
 			"version": "dev-tft-launch",
 			"versionExact": "dev-tft-launch"
 		},
 		{
 			"checksumSHA1": "v/Mj/5lQbEL+Zy5OzQK9kgY4nWk=",
 			"path": "github.com/zero-os/0-stor/client/metastor/db",
-			"revision": "ab29bd78c7827556b3d94c8a518f02dd1e89fc53",
-			"revisionTime": "2018-03-21T00:08:10Z",
+			"revision": "be54afa93229e27688b2387df5382e58ef41f135",
+			"revisionTime": "2018-03-23T18:47:53Z",
 			"version": "dev-tft-launch",
 			"versionExact": "dev-tft-launch"
 		},
 		{
 			"checksumSHA1": "yfwjLYymjBslpi0W9BFLrkAmaZ4=",
 			"path": "github.com/zero-os/0-stor/client/metastor/db/etcd",
-			"revision": "ab29bd78c7827556b3d94c8a518f02dd1e89fc53",
-			"revisionTime": "2018-03-21T00:08:10Z",
+			"revision": "be54afa93229e27688b2387df5382e58ef41f135",
+			"revisionTime": "2018-03-23T18:47:53Z",
 			"version": "dev-tft-launch",
 			"versionExact": "dev-tft-launch"
 		},
 		{
 			"checksumSHA1": "bn5Hj4N9ne17Lb0oYC/6laB4yds=",
 			"path": "github.com/zero-os/0-stor/client/metastor/encoding",
-			"revision": "ab29bd78c7827556b3d94c8a518f02dd1e89fc53",
-			"revisionTime": "2018-03-21T00:08:10Z",
+			"revision": "be54afa93229e27688b2387df5382e58ef41f135",
+			"revisionTime": "2018-03-23T18:47:53Z",
 			"version": "dev-tft-launch",
 			"versionExact": "dev-tft-launch"
 		},
 		{
 			"checksumSHA1": "YW/B6nH+BJ0DVw+QP5DZnluitUY=",
 			"path": "github.com/zero-os/0-stor/client/metastor/encoding/proto",
-			"revision": "ab29bd78c7827556b3d94c8a518f02dd1e89fc53",
-			"revisionTime": "2018-03-21T00:08:10Z",
+			"revision": "be54afa93229e27688b2387df5382e58ef41f135",
+			"revisionTime": "2018-03-23T18:47:53Z",
 			"version": "dev-tft-launch",
 			"versionExact": "dev-tft-launch"
 		},
 		{
 			"checksumSHA1": "RdDJnim68MhezuqunsYC+GALGdY=",
 			"path": "github.com/zero-os/0-stor/client/metastor/metatypes",
-			"revision": "ab29bd78c7827556b3d94c8a518f02dd1e89fc53",
-			"revisionTime": "2018-03-21T00:08:10Z",
+			"revision": "be54afa93229e27688b2387df5382e58ef41f135",
+			"revisionTime": "2018-03-23T18:47:53Z",
 			"version": "dev-tft-launch",
 			"versionExact": "dev-tft-launch"
 		},
 		{
 			"checksumSHA1": "x27a/Y7tDe1H+vpfsTFw7TzPHAE=",
 			"path": "github.com/zero-os/0-stor/client/processing",
-			"revision": "ab29bd78c7827556b3d94c8a518f02dd1e89fc53",
-			"revisionTime": "2018-03-21T00:08:10Z",
+			"revision": "be54afa93229e27688b2387df5382e58ef41f135",
+			"revisionTime": "2018-03-23T18:47:53Z",
 			"version": "dev-tft-launch",
 			"versionExact": "dev-tft-launch"
 		},
