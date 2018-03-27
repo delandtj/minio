@@ -95,8 +95,7 @@ func (fu *filemetaUploadMgr) ListPart(uploadID string) ([]PartInfo, error) {
 		infos = append(infos, info)
 	}
 
-	// sort it by part number
-	sort.Sort(PartInfoByPartNumber(infos))
+	sort.Sort(PartInfoSorter(infos))
 	return infos, err
 }
 

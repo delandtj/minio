@@ -329,6 +329,7 @@ func (zo *zerostorObjects) ListObjects(bucket, prefix, marker, delimiter string,
 	return
 }
 
+// PutObject implements ObjectLayer.PutObject
 func (zo *zerostorObjects) PutObject(bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
 	debugf("PutObject bucket:%v, object:%v, metadata:%v\n", bucket, object, metadata)
 	return zo.putObject(bucket, object, data, metadata)
@@ -393,6 +394,16 @@ func (zo *zerostorObjects) AbortMultipartUpload(bucket, object, uploadID string)
 	return zstorToObjectErr(errors.Trace(err), bucket, object)
 }
 
+// ListObjectsParts implements ObjectLayer.ListObjectParts
+func (zo *zerostorObjects) ListObjectsParts(bucket, object, uploadID string, partNumberMarker, maxParts int) (result minio.ListPartsInfo, err error) {
+	result, err = zo.multipartMgr.ListParts(bucket, object, uploadID, partNumberMarker, maxParts)
+	if err != nil {
+		log.Println("ListObjectsParts failed: %v", err)
+	}
+	return
+}
+
+// HealObject implements ObjectLayer.HealObject
 func (zo *zerostorObjects) HealObject(bucket, object string, dryRun bool) (madmin.HealResultItem, error) {
 	log.Printf("healObject %v/%v dryRun=%v\n", bucket, object, dryRun)
 

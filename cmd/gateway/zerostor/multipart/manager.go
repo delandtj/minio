@@ -164,6 +164,28 @@ func (m *manager) Abort(bucket, object, uploadID string) error {
 	return nil
 }
 
+// ListParts implements Manager.ListParts
+func (m *manager) ListParts(bucket, object, uploadID string, partMarker, maxParts int) (minio.ListPartsInfo, error) {
+	parts, err := m.metaMgr.ListPart(uploadID)
+	if err != nil {
+		return minio.ListPartsInfo{}, err
+	}
+
+	infos := make([]minio.PartInfo, 0, len(parts))
+	for _, part := range parts {
+		infos = append(infos, part.PartInfo)
+	}
+
+	return minio.ListPartsInfo{
+		Bucket:           bucket,
+		Object:           object,
+		UploadID:         uploadID,
+		MaxParts:         len(parts),
+		PartNumberMarker: partMarker,
+		Parts:            infos,
+	}, nil
+}
+
 // Close implements Manager.Close
 func (m *manager) Close() error {
 	return nil

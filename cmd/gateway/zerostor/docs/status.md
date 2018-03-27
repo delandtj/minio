@@ -27,6 +27,7 @@
 | PutObjectPart           | v   | v   | v   |
 | CompleteMultipart       | v   | v   | v   |
 | AbortMultipart          | v   | v   | v   |
+| ListObjectParts         | v   |     | v   |
 | ------------------      | -   | -   | -   | ----------------------------------                                                                                  |
 | Heal Bucket             | v   | v   | -   | always return true                                                                                                  |
 | Heal Object             | v   |     |     |
