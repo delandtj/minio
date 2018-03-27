@@ -34,6 +34,10 @@ type Manager interface {
 	// clean all temporary storage and metadata
 	Abort(bucket, object, uploadID string) error
 
+	// ListParts list PartInfo of all parts of an upload identified by the given upload ID.
+	// The parts are sorted ascended by part number & last upload time.
+	ListParts(bucket, object, uploadID string, partNumberMarker, maxParts int) (minio.ListPartsInfo, error)
+
 	// Close closes the manager
 	Close() error
 }
@@ -73,12 +77,17 @@ type PartInfo struct {
 	minio.PartInfo
 }
 
-// PartInfoByPartNumber implements sort.Interface
-type PartInfoByPartNumber []PartInfo
+// PartInfoSorter implements sort.Interface
+type PartInfoSorter []PartInfo
 
-func (a PartInfoByPartNumber) Len() int           { return len(a) }
-func (a PartInfoByPartNumber) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a PartInfoByPartNumber) Less(i, j int) bool { return a[i].PartNumber < a[j].PartNumber }
+func (a PartInfoSorter) Len() int      { return len(a) }
+func (a PartInfoSorter) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a PartInfoSorter) Less(i, j int) bool {
+	if a[i].PartNumber != a[j].PartNumber { // sort by part number first
+		return a[i].PartNumber < a[j].PartNumber
+	}
+	return a[i].LastModified.Before(a[j].LastModified)
+}
 
 // NewDefaultManager creates new default multipart manager
 func NewDefaultManager(stor Storage, metaDir string) (Manager, error) {

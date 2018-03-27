@@ -3,7 +3,7 @@ package multipart
 import (
 	"bytes"
 	"crypto/rand"
-	//"sort"
+	"fmt"
 	"testing"
 
 	minio "github.com/minio/minio/cmd"
@@ -144,6 +144,78 @@ func TestManagerAbort(t *testing.T) {
 	}
 }
 
+func TestManagerListPart(t *testing.T) {
+	const (
+		bucket   = "bucket"
+		object   = "object"
+		dataLen  = 1000
+		partSize = 100
+	)
+	stor := newStorTest()
+
+	mgr, _, cleanup := newDefaultUploadMgr(t, stor)
+	defer cleanup()
+
+	// init
+	uploadID, err := mgr.Init(bucket, object)
+	if err != nil {
+		t.Fatalf("mulipart upload failed: %v", err)
+	}
+
+	// upload part
+	var (
+		uploadedParts []minio.PartInfo
+		data          = make([]byte, dataLen)
+	)
+	rand.Read(data)
+
+	for i := 0; i < dataLen/partSize; i++ {
+		dataPart := data[i*partSize : (i+1)*partSize]
+
+		part, err := mgr.UploadPart(bucket, object, uploadID, minio.GenETag(), i, bytes.NewReader(dataPart))
+		if err != nil {
+			t.Fatalf("failed to upload part: %v, err: %v", i, err)
+		}
+		uploadedParts = append(uploadedParts, part)
+	}
+
+	// list  part
+	listPartsInfo, err := mgr.ListParts(bucket, object, uploadID, 0, 1000)
+	if err != nil {
+		t.Fatalf("ListParts failed: %v", err)
+	}
+	if listPartsInfo.Bucket != bucket {
+		t.Fatalf("invalid bucket: %v, expected: %v", listPartsInfo.Bucket, bucket)
+	}
+	if listPartsInfo.Object != object {
+		t.Fatalf("invalid object: %v, expected: %v", listPartsInfo.Object, object)
+	}
+	if listPartsInfo.UploadID != uploadID {
+		t.Fatalf("invalid uploadID: %v, expected: %v", listPartsInfo.UploadID, uploadID)
+	}
+
+	// check the listed parts
+	listedParts := listPartsInfo.Parts
+	err = func() error {
+		if len(listedParts) != len(uploadedParts) {
+			return fmt.Errorf("invalid listed parts:%v, expected: %v", len(listedParts), len(uploadedParts))
+		}
+		for i, part := range uploadedParts {
+			if part.PartNumber != listedParts[i].PartNumber {
+				return fmt.Errorf("invalid part number for part: %v, got: %v, expected: %v",
+					i, listedParts[i].PartNumber, part.PartNumber)
+			}
+			if part.ETag != listedParts[i].ETag {
+				return fmt.Errorf("invalid ETag for part: %v, got: %v, expected: %v",
+					i, listedParts[i].ETag, part.ETag)
+			}
+		}
+		return nil
+	}()
+	if err != nil {
+		t.Fatalf("list parts result check failed: %v", err)
+	}
+}
 func newDefaultUploadMgr(t *testing.T, stor Storage) (Manager, MetaManager, func()) {
 	metaMgr, cleanupMeta := newTestFilemetaUploadMgr(t)
 
