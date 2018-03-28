@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"fmt"
+	"sort"
 	"testing"
 
 	minio "github.com/minio/minio/cmd"
@@ -62,7 +63,7 @@ func TestManagerComplete(t *testing.T) {
 	}
 
 	// all parts that should be deleted
-	deletedParts, err := metaMgr.ListPart(uploadID)
+	deletedParts, err := metaMgr.ListPart(bucket, uploadID)
 	if err != nil {
 		t.Fatalf("failed to list part :%v", err)
 	}
@@ -123,7 +124,7 @@ func TestManagerAbort(t *testing.T) {
 	}
 
 	// get parts info
-	parts, err := metaMgr.ListPart(uploadID)
+	parts, err := metaMgr.ListPart(bucket, uploadID)
 	if err != nil {
 		t.Fatalf("failed to list part :%v", err)
 	}
@@ -216,6 +217,62 @@ func TestManagerListPart(t *testing.T) {
 		t.Fatalf("list parts result check failed: %v", err)
 	}
 }
+
+func TestManagerListUpload(t *testing.T) {
+	const (
+		bucket    = "bucket"
+		object    = "object"
+		dataLen   = 1000
+		partSize  = 100
+		numUpload = 10
+	)
+	stor := newStorTest()
+
+	mgr, _, cleanup := newDefaultUploadMgr(t, stor)
+	defer cleanup()
+
+	var (
+		data      = make([]byte, dataLen)
+		uploadIDs []string
+	)
+	rand.Read(data)
+
+	for i := 0; i < numUpload; i++ {
+		// init
+		uploadID, err := mgr.Init(bucket, object)
+		if err != nil {
+			t.Fatalf("mulipart upload failed: %v", err)
+		}
+
+		// upload part
+
+		for i := 0; i < dataLen/partSize; i++ {
+			_, err := mgr.UploadPart(bucket, object, uploadID, minio.GenETag(), i, bytes.NewReader(data))
+			if err != nil {
+				t.Fatalf("failed to upload part: %v, err: %v", i, err)
+			}
+		}
+
+		uploadIDs = append(uploadIDs, uploadID)
+	}
+	sort.Strings(uploadIDs)
+
+	listMultiparts, err := mgr.ListUpload(bucket, "", "", "", "", 10000)
+	if err != nil {
+		t.Fatalf("failed to list upload: %v", err)
+	}
+
+	uploadeds := listMultiparts.Uploads
+	if len(uploadeds) != numUpload {
+		t.Fatalf("invalid number of listed multipart upload: %v, expected: %v", len(uploadeds), numUpload)
+	}
+	for i, uploadID := range uploadIDs {
+		if uploadID != uploadeds[i].UploadID {
+			t.Fatalf("invalid upload id for upload `%v`: %v, expected: %v", i, uploadeds[i].UploadID, uploadID)
+		}
+	}
+}
+
 func newDefaultUploadMgr(t *testing.T, stor Storage) (Manager, MetaManager, func()) {
 	metaMgr, cleanupMeta := newTestFilemetaUploadMgr(t)
 

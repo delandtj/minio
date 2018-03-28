@@ -34,6 +34,9 @@ type Manager interface {
 	// clean all temporary storage and metadata
 	Abort(bucket, object, uploadID string) error
 
+	// ListUpload returns all unfinished multipart upload.
+	ListUpload(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result minio.ListMultipartsInfo, err error)
+
 	// ListParts list PartInfo of all parts of an upload identified by the given upload ID.
 	// The parts are sorted ascended by part number & last upload time.
 	ListParts(bucket, object, uploadID string, partNumberMarker, maxParts int) (minio.ListPartsInfo, error)
@@ -47,20 +50,23 @@ type Manager interface {
 type MetaManager interface {
 	// InitUpload initializes all metadata required
 	// to do multipart upload
-	Init(bucket, object string) (uploadID string, err error)
+	Init(bucket, object string) (info minio.MultipartInfo, err error)
 
 	// AddPart add PartInfo to an upload ID
-	AddPart(uploadID string, partID int, info PartInfo) error
+	AddPart(bucket, uploadID string, partID int, info PartInfo) error
 
 	// Remove PartInfo with given etag & partID from an uploadID
-	DelPart(uploadID string, etag string, partID int) error
+	DelPart(bucket, uploadID string, etag string, partID int) error
+
+	// ListUpload returns all unfinished multipart upload, sorted by upload ID
+	ListUpload(bucket string) ([]minio.MultipartInfo, error)
 
 	// ListPart returns all PartInfo for an uploadID
 	// sorted ascended by partID
-	ListPart(uploadID string) ([]PartInfo, error)
+	ListPart(bucket, uploadID string) ([]PartInfo, error)
 
 	// Clean cleans all metadata for an upload ID
-	Clean(uploadID string) error
+	Clean(bucket, uploadID string) error
 }
 
 // Storage represents temporary storage used to store
@@ -75,18 +81,6 @@ type Storage interface {
 type PartInfo struct {
 	Object string // object name in 0-stor
 	minio.PartInfo
-}
-
-// PartInfoSorter implements sort.Interface
-type PartInfoSorter []PartInfo
-
-func (a PartInfoSorter) Len() int      { return len(a) }
-func (a PartInfoSorter) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a PartInfoSorter) Less(i, j int) bool {
-	if a[i].PartNumber != a[j].PartNumber { // sort by part number first
-		return a[i].PartNumber < a[j].PartNumber
-	}
-	return a[i].LastModified.Before(a[j].LastModified)
 }
 
 // NewDefaultManager creates new default multipart manager

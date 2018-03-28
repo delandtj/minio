@@ -8,12 +8,14 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 
 	minio "github.com/minio/minio/cmd"
 )
 
 const (
-	uploadIDLen = 8
+	uploadIDLen    = 8
+	uploadMetaFile = ".meta" // metadata of an upload
 )
 
 var (
@@ -21,6 +23,8 @@ var (
 	filePerm = os.FileMode(0644)
 )
 
+// filemetaUploadMgr defines filebased metadata manager that implements
+// MetaManager interface
 type filemetaUploadMgr struct {
 	rootDir string
 }
@@ -38,20 +42,41 @@ func newFilemetaUploadMgr(metaDir string) (*filemetaUploadMgr, error) {
 }
 
 // Init implements MetaManager.Init
-func (fu *filemetaUploadMgr) Init(bucket, object string) (string, error) {
+func (fu *filemetaUploadMgr) Init(bucket, object string) (info minio.MultipartInfo, err error) {
 	// create upload ID
-	uploadID, err := fu.createUploadID()
+	uploadID, err := fu.createUploadID(bucket)
 	if err != nil {
-		return "", err
+		return
 	}
 
-	// create the dir
-	return uploadID, os.MkdirAll(fu.uploadDir(uploadID), dirPerm)
+	info = minio.MultipartInfo{
+		UploadID:  uploadID,
+		Object:    object,
+		Initiated: time.Now(),
+	}
+
+	// creates the dir
+	uploadDir := fu.uploadDir(bucket, uploadID)
+	err = os.MkdirAll(uploadDir, dirPerm)
+	if err != nil {
+		return
+	}
+
+	// creates meta file
+	uploadMetaFile := filepath.Join(uploadDir, uploadMetaFile)
+	f, err := os.OpenFile(uploadMetaFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, filePerm)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	err = gob.NewEncoder(f).Encode(info)
+	return
 }
 
 // AddManager implements MetaManager.AddPart
-func (fu *filemetaUploadMgr) AddPart(uploadID string, partID int, info PartInfo) error {
-	partFile := fu.partFile(uploadID, info.ETag, partID)
+func (fu *filemetaUploadMgr) AddPart(bucket, uploadID string, partID int, info PartInfo) error {
+	partFile := fu.partFile(bucket, uploadID, info.ETag, partID)
 
 	f, err := os.OpenFile(partFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, filePerm)
 	if err != nil {
@@ -63,14 +88,48 @@ func (fu *filemetaUploadMgr) AddPart(uploadID string, partID int, info PartInfo)
 }
 
 // DelPart implements MetaManager.DelPart
-func (fu *filemetaUploadMgr) DelPart(uploadID, etag string, partID int) error {
-	return os.Remove(fu.partFile(uploadID, etag, partID))
+func (fu *filemetaUploadMgr) DelPart(bucket, uploadID, etag string, partID int) error {
+	return os.Remove(fu.partFile(bucket, uploadID, etag, partID))
+}
+
+// ListUpload implements MetaManager.ListUpload
+func (fu *filemetaUploadMgr) ListUpload(bucket string) ([]minio.MultipartInfo, error) {
+	// get upload list
+	fileInfos, err := ioutil.ReadDir(filepath.Join(fu.rootDir, bucket))
+	if err != nil {
+		return nil, err
+	}
+
+	uploads := make([]minio.MultipartInfo, 0, len(fileInfos))
+
+	// get metadata of each upload
+	for _, fi := range fileInfos {
+		if !fi.IsDir() {
+			continue
+		}
+		upload, err := fu.loadUpload(bucket, fi.Name())
+		if err != nil {
+			return nil, err
+		}
+		uploads = append(uploads, upload)
+	}
+
+	// sort by ID
+	sort.Slice(uploads, func(i, j int) bool {
+		return uploads[i].UploadID < uploads[j].UploadID
+	})
+
+	return uploads, nil
 }
 
 // ListPart implements MetaManager.ListPart
-func (fu *filemetaUploadMgr) ListPart(uploadID string) ([]PartInfo, error) {
+func (fu *filemetaUploadMgr) ListPart(bucket, uploadID string) ([]PartInfo, error) {
+	var (
+		uploadDir = fu.uploadDir(bucket, uploadID)
+		infos     []PartInfo
+	)
 	// read from the uploadID dir
-	fis, err := ioutil.ReadDir(fu.uploadDir(uploadID))
+	fis, err := ioutil.ReadDir(uploadDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			err = minio.InvalidUploadID{}
@@ -78,16 +137,15 @@ func (fu *filemetaUploadMgr) ListPart(uploadID string) ([]PartInfo, error) {
 		return nil, err
 	}
 
-	var (
-		uploadDir = fu.uploadDir(uploadID)
-		infos     = make([]PartInfo, 0, len(fis))
-	)
-
 	// read-decode each file
 	for _, fi := range fis {
 		if fi.IsDir() { // should never happen
 			continue
 		}
+		if fi.Name() == uploadMetaFile {
+			continue
+		}
+
 		info, err := fu.decodePart(filepath.Join(uploadDir, fi.Name()))
 		if err != nil {
 			return nil, err
@@ -95,13 +153,19 @@ func (fu *filemetaUploadMgr) ListPart(uploadID string) ([]PartInfo, error) {
 		infos = append(infos, info)
 	}
 
-	sort.Sort(PartInfoSorter(infos))
+	sort.Slice(infos, func(i, j int) bool {
+		if infos[i].PartNumber != infos[j].PartNumber { // sort by part number first
+			return infos[i].PartNumber < infos[j].PartNumber
+		}
+		return infos[i].LastModified.Before(infos[j].LastModified)
+
+	})
 	return infos, err
 }
 
 // Clean implements MetaManager.Clean
-func (fu *filemetaUploadMgr) Clean(uploadID string) error {
-	return os.RemoveAll(fu.uploadDir(uploadID))
+func (fu *filemetaUploadMgr) Clean(bucket, uploadID string) error {
+	return os.RemoveAll(fu.uploadDir(bucket, uploadID))
 }
 
 // Close implements MetaManager.Close
@@ -110,7 +174,7 @@ func (fu *filemetaUploadMgr) Close() error {
 }
 
 // create unique upload ID
-func (fu *filemetaUploadMgr) createUploadID() (string, error) {
+func (fu *filemetaUploadMgr) createUploadID(bucket string) (string, error) {
 	buf := make([]byte, uploadIDLen)
 
 	for i := 0; i < 3; i++ {
@@ -120,7 +184,7 @@ func (fu *filemetaUploadMgr) createUploadID() (string, error) {
 
 		uploadID := fmt.Sprintf("%x", buf)
 
-		if !fu.checkUploadIDExist(uploadID) {
+		if !fu.checkUploadIDExist(bucket, uploadID) {
 			return uploadID, nil
 		}
 	}
@@ -143,17 +207,30 @@ func (fu *filemetaUploadMgr) decodePart(partFile string) (info PartInfo, err err
 }
 
 // check whether the given upload ID already exist in the system
-func (fu *filemetaUploadMgr) checkUploadIDExist(uploadID string) bool {
-	_, err := os.Stat(fu.uploadDir(uploadID))
+func (fu *filemetaUploadMgr) checkUploadIDExist(bucket, uploadID string) bool {
+	_, err := os.Stat(fu.uploadDir(bucket, uploadID))
 	return !os.IsNotExist(err)
 }
 
-func (fu *filemetaUploadMgr) uploadDir(uploadID string) string {
-	return filepath.Join(fu.rootDir, uploadID)
+func (fu *filemetaUploadMgr) uploadDir(bucket, uploadID string) string {
+	return filepath.Join(fu.rootDir, bucket, uploadID)
 }
 
-func (fu *filemetaUploadMgr) partFile(uploadID, etag string, partID int) string {
-	return filepath.Join(fu.uploadDir(uploadID), fmt.Sprintf("%s_%d", etag, partID))
+func (fu *filemetaUploadMgr) partFile(bucket, uploadID, etag string, partID int) string {
+	return filepath.Join(fu.uploadDir(bucket, uploadID), fmt.Sprintf("%s_%d", etag, partID))
+}
+
+func (fu *filemetaUploadMgr) loadUpload(bucket, uploadID string) (up minio.MultipartInfo, err error) {
+	// open upload's meta file
+	filename := filepath.Join(fu.uploadDir(bucket, uploadID), uploadMetaFile)
+	f, err := os.Open(filename)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	err = gob.NewDecoder(f).Decode(&up)
+	return
 }
 
 var (

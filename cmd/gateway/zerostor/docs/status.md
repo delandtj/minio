@@ -28,6 +28,7 @@
 | CompleteMultipart       | v   | v   | v   |
 | AbortMultipart          | v   | v   | v   |
 | ListObjectParts         | v   |     | v   |
+| ListMultipartUpload     | v   |     | v   | only respect `bucket` argument, because of lack of docs & example in production ready gateway.                      |
 | ------------------      | -   | -   | -   | ----------------------------------                                                                                  |
 | Heal Bucket             | v   | v   | -   | always return true                                                                                                  |
 | Heal Object             | v   |     |     |
