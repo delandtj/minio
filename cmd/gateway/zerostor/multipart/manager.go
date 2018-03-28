@@ -30,7 +30,11 @@ func newManager(stor Storage, metaMgr MetaManager) *manager {
 
 // Init implements Manager.Init
 func (m *manager) Init(bucket, object string) (string, error) {
-	return m.metaMgr.Init(bucket, object)
+	info, err := m.metaMgr.Init(bucket, object)
+	if err != nil {
+		return "", err
+	}
+	return info.UploadID, nil
 }
 
 // UploadPart implements Manager.UploadPart
@@ -60,14 +64,14 @@ func (m *manager) UploadPart(bucket, object, uploadID, etag string, partID int, 
 		Object:   partObject,
 		PartInfo: info,
 	}
-	err = m.metaMgr.AddPart(uploadID, partID, metaInfo)
+	err = m.metaMgr.AddPart(bucket, uploadID, partID, metaInfo)
 	return
 }
 
 // Complete implements Manager.Complete
 func (m *manager) Complete(bucket, object, uploadID string, parts []minio.CompletePart) (*metatypes.Metadata, error) {
 	// get all  part info of this upload ID
-	storedInfos, err := m.getStoredInfo(uploadID)
+	storedInfos, err := m.getStoredInfo(bucket, uploadID)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +112,7 @@ func (m *manager) Complete(bucket, object, uploadID string, parts []minio.Comple
 			// we don't check the error here because
 			// we want to keep delete next part.
 			// another tools should do metadata cleanup
-			m.metaMgr.DelPart(uploadID, part.ETag, part.PartNumber)
+			m.metaMgr.DelPart(bucket, uploadID, part.ETag, part.PartNumber)
 		}
 		errCh <- nil
 	}()
@@ -132,7 +136,7 @@ func (m *manager) Complete(bucket, object, uploadID string, parts []minio.Comple
 			// on failed deletion.
 			// Other tool should do garbage storage cleanup
 
-			m.metaMgr.DelPart(uploadID, info.ETag, info.PartNumber)
+			m.metaMgr.DelPart(bucket, uploadID, info.ETag, info.PartNumber)
 			// we don't check the error here because
 			// we want to keep delete next part.
 			// another tools should do metadata cleanup
@@ -145,7 +149,7 @@ func (m *manager) Complete(bucket, object, uploadID string, parts []minio.Comple
 
 // Abort implements Manager.Abort
 func (m *manager) Abort(bucket, object, uploadID string) error {
-	parts, err := m.metaMgr.ListPart(uploadID)
+	parts, err := m.metaMgr.ListPart(bucket, uploadID)
 	if err != nil {
 		return err
 	}
@@ -159,14 +163,29 @@ func (m *manager) Abort(bucket, object, uploadID string) error {
 		// we don't check the error here because
 		// we want to keep delete next part.
 		// another tools should do metadata cleanup
-		m.metaMgr.DelPart(uploadID, part.ETag, part.PartNumber)
+		m.metaMgr.DelPart(bucket, uploadID, part.ETag, part.PartNumber)
 	}
 	return nil
 }
 
+// ListUpload implements Manager.ListUpload
+func (m *manager) ListUpload(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result minio.ListMultipartsInfo, err error) {
+	uploads, err := m.metaMgr.ListUpload(bucket)
+	if err != nil {
+		return
+	}
+	result = minio.ListMultipartsInfo{
+		KeyMarker:      keyMarker,
+		UploadIDMarker: uploadIDMarker,
+		MaxUploads:     maxUploads,
+		Uploads:        uploads,
+	}
+	return
+}
+
 // ListParts implements Manager.ListParts
 func (m *manager) ListParts(bucket, object, uploadID string, partMarker, maxParts int) (minio.ListPartsInfo, error) {
-	parts, err := m.metaMgr.ListPart(uploadID)
+	parts, err := m.metaMgr.ListPart(bucket, uploadID)
 	if err != nil {
 		return minio.ListPartsInfo{}, err
 	}
@@ -191,8 +210,8 @@ func (m *manager) Close() error {
 	return nil
 }
 
-func (m *manager) getStoredInfo(uploadID string) (map[string]PartInfo, error) {
-	infoArr, err := m.metaMgr.ListPart(uploadID)
+func (m *manager) getStoredInfo(bucket, uploadID string) (map[string]PartInfo, error) {
+	infoArr, err := m.metaMgr.ListPart(bucket, uploadID)
 	if err != nil {
 		return nil, err
 	}

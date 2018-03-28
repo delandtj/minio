@@ -394,11 +394,22 @@ func (zo *zerostorObjects) AbortMultipartUpload(bucket, object, uploadID string)
 	return zstorToObjectErr(errors.Trace(err), bucket, object)
 }
 
-// ListObjectsParts implements ObjectLayer.ListObjectParts
-func (zo *zerostorObjects) ListObjectsParts(bucket, object, uploadID string, partNumberMarker, maxParts int) (result minio.ListPartsInfo, err error) {
+// ListMultipartUploads implements ObjectLayer.ListMultipartUploads
+// Note: because of lack of docs and example in production ready gateway,
+// we don't respect : prefix, keyMarker, uploadIDMarker, delimiter, and maxUploads
+func (zo *zerostorObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result minio.ListMultipartsInfo, err error) {
+	result, err = zo.multipartMgr.ListUpload(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
+	if err != nil {
+		err = zstorToObjectErr(errors.Trace(err), bucket)
+	}
+	return
+}
+
+// ListObjectParts implements ObjectLayer.ListObjectParts
+func (zo *zerostorObjects) ListObjectParts(bucket, object, uploadID string, partNumberMarker, maxParts int) (result minio.ListPartsInfo, err error) {
 	result, err = zo.multipartMgr.ListParts(bucket, object, uploadID, partNumberMarker, maxParts)
 	if err != nil {
-		log.Println("ListObjectsParts failed: %v", err)
+		log.Println("ListObjectParts failed: %v", err)
 	}
 	return
 }
