@@ -51,6 +51,24 @@ Put your 0-stor config file as specified by `MINIO_ZEROSTOR_CONFIG_FILE`.
 ./bin/zdb --mode direct --port 12345
 ```
 
+### example configuration
+
+```yaml
+namespace: thedisk
+password: kunci
+datastor: # required
+  # the address(es) of a zstordb cluster (required0)
+  shards: # required
+    - 127.0.0.1:12345
+  pipeline:
+    block_size: 4096
+    compression: # optional, snappy by default
+      type: snappy # snappy is the default, other options: lz4, gzip
+      mode: default # default is the default, other options: best_speed, best_compression
+    encryption: # optional, disabled by default
+      type: aes # aes is the default and only standard option
+      private_key: ab345678901234567890123456789012
+```
 ### Run the gateway
 
 `./minio gateway zerostor`
