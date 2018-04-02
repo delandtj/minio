@@ -1,4 +1,4 @@
-package zerostor
+package meta
 
 import (
 	"io/ioutil"
@@ -10,25 +10,29 @@ import (
 	minio "github.com/minio/minio/cmd"
 )
 
-// bucketMgr defines the manager of this zerostor gateway's
-// buckets
+const (
+	bucketDir = "buckets"
+)
+
+// bucketMgr implements bucketManager interface using
+// file based implementation
 type bucketMgr struct {
 	mux            sync.RWMutex
 	buckets        map[string]*bucket // in memory bucket objects, for faster access
 	dir            string             // directory of the bucket metadata
-	objDir         string             // directory of the object metadata
 	specialBuckets []string           // special buckets, which should be hidden
 }
 
-// newBucketMgr creates new bucketMgr object
-func newBucketMgr(metaDir string, specialBuckets ...string) (*bucketMgr, error) {
+// NewDefaultBucketMgr creates default BucketManager implementation.
+// The implementation is using file based storage
+func NewDefaultBucketMgr(metaDir string, specialBuckets ...string) (BucketManager, error) {
 	var (
 		buckets = make(map[string]*bucket)
-		dir     = filepath.Join(metaDir, metaBucketDir)
+		dir     = filepath.Join(metaDir, bucketDir)
 	)
 
 	// initialize bucket dir, if not exist
-	if err := os.MkdirAll(dir, rootDirPerm); err != nil {
+	if err := os.MkdirAll(dir, dirPerm); err != nil {
 		return nil, err
 	}
 
@@ -53,17 +57,16 @@ func newBucketMgr(metaDir string, specialBuckets ...string) (*bucketMgr, error) 
 	mgr := &bucketMgr{
 		buckets:        buckets,
 		dir:            dir,
-		objDir:         filepath.Join(metaDir, metaObjectDir),
 		specialBuckets: specialBuckets,
 	}
 
 	// creates special bucket
 	for _, bucket := range specialBuckets {
-		if _, ok := mgr.get(bucket); ok {
+		if _, ok := mgr.Get(bucket); ok {
 			continue
 		}
 
-		err = mgr.createBucket(bucket)
+		err = mgr.Create(bucket)
 		if err != nil {
 			return nil, err
 		}
@@ -73,18 +76,13 @@ func newBucketMgr(metaDir string, specialBuckets ...string) (*bucketMgr, error) 
 	return mgr, nil
 }
 
-// creates bucket
-func (bm *bucketMgr) createBucket(bucket string) error {
+// Create implements bucketManager.Create interface
+func (bm *bucketMgr) Create(bucket string) error {
 	bm.mux.Lock()
 	defer bm.mux.Unlock()
 
 	if _, ok := bm.buckets[bucket]; ok {
 		return minio.BucketExists{}
-	}
-
-	// create bucket in objdir
-	if err := os.MkdirAll(filepath.Join(bm.objDir, bucket), rootDirPerm); err != nil {
-		return err
 	}
 
 	// creates the actual bucket
@@ -97,7 +95,14 @@ func (bm *bucketMgr) createBucket(bucket string) error {
 	return nil
 }
 
-// get bucket object
+// Get implements bucketManager.Get interface
+func (bm *bucketMgr) Get(bucket string) (*Bucket, bool) {
+	bkt, ok := bm.get(bucket)
+	if !ok {
+		return nil, false
+	}
+	return &bkt.Bucket, true
+}
 func (bm *bucketMgr) get(bucket string) (*bucket, bool) {
 	bm.mux.RLock()
 	bkt, ok := bm.buckets[bucket]
@@ -105,22 +110,22 @@ func (bm *bucketMgr) get(bucket string) (*bucket, bool) {
 	return bkt, ok
 }
 
-// get all buckets
-func (bm *bucketMgr) getAllBuckets() []bucket {
+// GetAllBuckets implements bucketManager.GetAllBuckets interface
+func (bm *bucketMgr) GetAllBuckets() []Bucket {
 	bm.mux.RLock()
 	defer bm.mux.RUnlock()
 
-	buckets := make([]bucket, 0, len(bm.buckets))
+	buckets := make([]Bucket, 0, len(bm.buckets))
 	for _, bkt := range bm.buckets {
 		if !bm.isSpecialBucket(bkt.Name) {
-			buckets = append(buckets, *bkt)
+			buckets = append(buckets, bkt.Bucket)
 		}
 	}
 	return buckets
 }
 
 // del deletes a bucket
-func (bm *bucketMgr) del(bucket string) error {
+func (bm *bucketMgr) Del(bucket string) error {
 	if err := os.Remove(filepath.Join(bm.dir, bucket)); err != nil {
 		return err
 	}
@@ -128,7 +133,8 @@ func (bm *bucketMgr) del(bucket string) error {
 	return nil
 }
 
-func (bm *bucketMgr) setPolicy(bucket string, pol policy.BucketPolicy) error {
+// SetPolicy implements bucketManager.SetPolicy interface
+func (bm *bucketMgr) SetPolicy(bucket string, pol policy.BucketPolicy) error {
 	bkt, ok := bm.get(bucket)
 	if !ok {
 		return minio.BucketNotFound{}
@@ -149,3 +155,7 @@ func (bm *bucketMgr) isSpecialBucket(bucket string) bool {
 	}
 	return false
 }
+
+var (
+	_ BucketManager = (*bucketMgr)(nil)
+)

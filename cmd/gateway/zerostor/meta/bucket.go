@@ -1,4 +1,4 @@
-package zerostor
+package meta
 
 import (
 	"encoding/gob"
@@ -16,18 +16,18 @@ const (
 )
 
 type bucket struct {
-	Name     string
-	Created  time.Time
-	Policy   policy.BucketPolicy
+	Bucket
 	filename string
 }
 
 func newBucket(name, dir string) (*bucket, error) {
 	b := &bucket{
-		Name:     name,
+		Bucket: Bucket{
+			Name:    name,
+			Created: time.Now(),
+			Policy:  defaultBucketPolicy,
+		},
 		filename: filepath.Join(dir, name),
-		Created:  time.Now(),
-		Policy:   defaultBucketPolicy,
 	}
 	return b, b.save()
 }
@@ -49,7 +49,7 @@ func newBucketFromFile(dir, filename string) (*bucket, error) {
 }
 
 func (b *bucket) save() error {
-	f, err := os.OpenFile(b.filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, fileMetaPerm)
+	f, err := os.OpenFile(b.filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, filePerm)
 	if err != nil {
 		return err
 	}

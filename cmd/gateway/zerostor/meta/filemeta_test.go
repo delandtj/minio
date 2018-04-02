@@ -1,4 +1,4 @@
-package zerostor
+package meta
 
 import (
 	"bytes"
@@ -23,7 +23,7 @@ func TestRoundTrip(t *testing.T) {
 		data      = []byte("bar")
 	)
 
-	fm, cleanup, err := newTestFilemeta(bucket)
+	fm, _, cleanup, err := newTestFilemeta(bucket)
 	if err != nil {
 		t.Fatalf("failed to create test filemeta: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestFilemetaHandleDir(t *testing.T) {
 		metadata  = []byte("*****")
 	)
 
-	fm, cleanup, err := newTestFilemeta(bucket)
+	fm, _, cleanup, err := newTestFilemeta(bucket)
 	if err != nil {
 		t.Fatalf("failed to create test filemeta: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestListObjects(t *testing.T) {
 		namespace = []byte("ns")
 	)
 
-	fm, cleanup, err := newTestFilemeta(bucket)
+	fm, marshalFuncPair, cleanup, err := newTestFilemeta(bucket)
 	if err != nil {
 		t.Fatalf("failed to create filemeta: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestListObjects(t *testing.T) {
 	}
 	for _, key := range keys {
 		key = bucket + "/" + key
-		metadata, err := fm.encodeFunc(metatypes.Metadata{
+		metadata, err := marshalFuncPair.Marshal(metatypes.Metadata{
 			Namespace:     namespace,
 			Key:           []byte(key),
 			Size:          4096,
@@ -214,8 +214,8 @@ func TestListObjects(t *testing.T) {
 	}
 }
 
-func newTestFilemeta(bucket string) (fm *filemeta, cleanup func(), err error) {
-	marshalFuncPair, err := encoding.NewMarshalFuncPair(encoding.MarshalTypeProtobuf)
+func newTestFilemeta(bucket string) (fm Storage, marshalFuncPair *encoding.MarshalFuncPair, cleanup func(), err error) {
+	marshalFuncPair, err = encoding.NewMarshalFuncPair(encoding.MarshalTypeProtobuf)
 	if err != nil {
 		return
 	}
@@ -225,13 +225,13 @@ func newTestFilemeta(bucket string) (fm *filemeta, cleanup func(), err error) {
 		return
 	}
 
-	bktMgr, err := newBucketMgr(metaDir)
+	bktMgr, err := NewDefaultBucketMgr(metaDir)
 	if err != nil {
 		os.RemoveAll(metaDir)
 		return
 	}
 
-	fm, err = newFilemeta(metaDir, bktMgr, marshalFuncPair)
+	fm, err = NewDefaultMetastor(metaDir, marshalFuncPair)
 	if err != nil {
 		os.RemoveAll(metaDir)
 		return
@@ -242,7 +242,7 @@ func newTestFilemeta(bucket string) (fm *filemeta, cleanup func(), err error) {
 		os.RemoveAll(metaDir)
 	}
 
-	err = bktMgr.createBucket(bucket)
+	err = bktMgr.Create(bucket)
 	return
 }
 

@@ -1,4 +1,4 @@
-package zerostor
+package meta
 
 import (
 	"errors"
@@ -14,41 +14,39 @@ import (
 )
 
 var (
-	rootDirPerm  = os.FileMode(0755)
-	fileMetaPerm = os.FileMode(0644)
+	dirPerm  = os.FileMode(0755)
+	filePerm = os.FileMode(0644)
 )
-
 var (
 	errMaxKeyReached = errors.New("max keys reached")
 )
 
 const (
 	metaObjectDir   = "objects"
-	metaBucketDir   = "buckets"
 	fileMetaDirSize = 4096 // size of dir always 4096
 )
 
-// filemeta is metadata that implements
-// github.com/zero-os/0-stor/client/metastor/db.DB interface
+// filemeta is file based metadata implementation that implements
+// metaStorage interface
 type filemeta struct {
 	rootDir    string // meta root dir
-	bktMgr     *bucketMgr
 	objDir     string // dir of objects meta
 	encodeFunc encoding.MarshalMetadata
 	decodeFunc encoding.UnmarshalMetadata
 }
 
-func newFilemeta(rootDir string, bktMgr *bucketMgr, marshalFuncPair *encoding.MarshalFuncPair) (*filemeta, error) {
+// NewDefaultMetastor creates default Storage implementation.
+// The implementation is using file based storage
+func NewDefaultMetastor(rootDir string, marshalFuncPair *encoding.MarshalFuncPair) (Storage, error) {
 	// initialize objDir
 	objDir := filepath.Join(rootDir, metaObjectDir)
-	if err := os.MkdirAll(objDir, rootDirPerm); err != nil {
+	if err := os.MkdirAll(objDir, dirPerm); err != nil {
 		return nil, err
 	}
 
 	return &filemeta{
 		rootDir:    rootDir,
 		objDir:     objDir,
-		bktMgr:     bktMgr,
 		encodeFunc: marshalFuncPair.Marshal,
 		decodeFunc: marshalFuncPair.Unmarshal,
 	}, nil
@@ -56,13 +54,7 @@ func newFilemeta(rootDir string, bktMgr *bucketMgr, marshalFuncPair *encoding.Ma
 
 // Set implements Set interface
 func (fm *filemeta) Set(namespace, key, metadata []byte) error {
-	// check that the bucket exist
-	bucket := fm.getBucketName(key)
-	if _, ok := fm.bktMgr.get(bucket); !ok {
-		return minio.BucketNotFound{}
-	}
-
-	return createWriteFile(fm.filename(key), metadata, fileMetaPerm)
+	return createWriteFile(fm.filename(key), metadata, filePerm)
 }
 
 // Get implements 0-stor/client/metastor/db.DB.Get
@@ -118,6 +110,19 @@ func (fm *filemeta) Update(namespace, key []byte, cb db.UpdateCallback) error {
 	return fm.Set(namespace, key, mdOut)
 }
 
+// get the metadata and decode it
+func (fm *filemeta) GetDecodeMeta(key []byte) (*metatypes.Metadata, error) {
+	rawMd, err := fm.Get([]byte(""), key)
+	if err != nil {
+		return nil, err
+	}
+
+	var md metatypes.Metadata
+
+	err = fm.decodeFunc(rawMd, &md)
+	return &md, err
+}
+
 func (fm *filemeta) Close() error {
 	return nil
 }
@@ -151,12 +156,12 @@ func (fm *filemeta) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 	}
 
 	// if file, get metadata of this file
-	md, err := fm.getDecodeMeta([]byte(filepath.Join(bucket, prefix)))
+	md, err := fm.GetDecodeMeta([]byte(filepath.Join(bucket, prefix)))
 	if err != nil {
 		return
 	}
 
-	result.Objects = append(result.Objects, createObjectInfo(bucket, prefix, md))
+	result.Objects = append(result.Objects, CreateObjectInfo(bucket, prefix, md))
 	return
 }
 
@@ -176,12 +181,12 @@ func (fm *filemeta) listDir(bucket, dir, marker, delimiter string, maxKeys int) 
 
 		key := filepath.Join(bucket, dir, f)
 
-		md, err = fm.getDecodeMeta([]byte(key))
+		md, err = fm.GetDecodeMeta([]byte(key))
 		if err != nil {
 			return
 		}
 		result.Objects = append(result.Objects,
-			createObjectInfo(bucket, filepath.Join(dir, f), md))
+			CreateObjectInfo(bucket, filepath.Join(dir, f), md))
 	}
 
 	// set the marker
@@ -287,19 +292,6 @@ func (fm *filemeta) readDirRecursive(absDir, marker string, maxKeys int) (files 
 	return
 }
 
-// get the metadata and decode it
-func (fm *filemeta) getDecodeMeta(key []byte) (*metatypes.Metadata, error) {
-	rawMd, err := fm.Get([]byte(""), key)
-	if err != nil {
-		return nil, err
-	}
-
-	var md metatypes.Metadata
-
-	err = fm.decodeFunc(rawMd, &md)
-	return &md, err
-}
-
 func (fm *filemeta) getBucketName(key []byte) string {
 	elems := strings.SplitN(string(key), string(filepath.Separator), 2)
 	return elems[0]
@@ -314,7 +306,7 @@ func createWriteFile(filename string, content []byte, perm os.FileMode) error {
 
 	// we don't check the dir existence before because
 	// most of the time the dir will already exist
-	if err := os.MkdirAll(filepath.Dir(filename), rootDirPerm); err != nil {
+	if err := os.MkdirAll(filepath.Dir(filename), dirPerm); err != nil {
 		return err
 	}
 	return ioutil.WriteFile(filename, content, perm)
@@ -323,3 +315,7 @@ func createWriteFile(filename string, content []byte, perm os.FileMode) error {
 func (fm *filemeta) filename(key []byte) string {
 	return filepath.Join(fm.objDir, string(key))
 }
+
+var (
+	_ Storage = (*filemeta)(nil)
+)

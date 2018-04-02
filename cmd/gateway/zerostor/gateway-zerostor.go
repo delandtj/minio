@@ -5,11 +5,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/pkg/policy"
 	minio "github.com/minio/minio/cmd"
+	"github.com/minio/minio/cmd/gateway/zerostor/meta"
 	"github.com/minio/minio/cmd/gateway/zerostor/multipart"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/errors"
@@ -19,7 +19,6 @@ import (
 	"github.com/zero-os/0-stor/client"
 	"github.com/zero-os/0-stor/client/datastor"
 	"github.com/zero-os/0-stor/client/metastor"
-	"github.com/zero-os/0-stor/client/metastor/metatypes"
 )
 
 const (
@@ -158,7 +157,7 @@ func newGatewayLayerWithZerostor(zstor *zerostor, metaDir string) (minio.ObjectL
 type zerostorObjects struct {
 	minio.GatewayUnsupported
 	zstor        *zerostor
-	bktMgr       *bucketMgr
+	bktMgr       meta.BucketManager
 	multipartMgr multipart.Manager
 	debug        bool
 }
@@ -176,7 +175,7 @@ func (zo *zerostorObjects) GetBucketInfo(bucket string) (bucketInfo minio.Bucket
 
 func (zo *zerostorObjects) DeleteBucket(bucket string) error {
 	log.Println("DeleteBucket ", bucket)
-	err := zo.bktMgr.del(bucket)
+	err := zo.bktMgr.Del(bucket)
 	return zstorToObjectErr(errors.Trace(err), bucket)
 }
 
@@ -198,7 +197,7 @@ func (zo *zerostorObjects) MakeBucketWithLocation(bucket string, location string
 		return zstorToObjectErr(errors.Trace(errBucketExists), bucket)
 	}
 
-	err = zo.bktMgr.createBucket(bucket)
+	err = zo.bktMgr.Create(bucket)
 	return zstorToObjectErr(errors.Trace(err), bucket)
 }
 
@@ -234,13 +233,13 @@ func (zo *zerostorObjects) SetBucketPolicy(bucket string, policyInfo policy.Buck
 	}
 
 	// save the new policy
-	err := zo.bktMgr.setPolicy(bucket, pol)
+	err := zo.bktMgr.SetPolicy(bucket, pol)
 
 	return zstorToObjectErr(errors.Trace(err), bucket)
 }
 
 func (zo *zerostorObjects) DeleteBucketPolicy(bucket string) error {
-	err := zo.bktMgr.setPolicy(bucket, policy.BucketPolicyNone)
+	err := zo.bktMgr.SetPolicy(bucket, policy.BucketPolicyNone)
 	return zstorToObjectErr(errors.Trace(err), bucket)
 }
 
@@ -281,7 +280,7 @@ func (zo *zerostorObjects) CopyObject(srcBucket, srcObject, destBucket, destObje
 		return
 	}
 
-	objInfo = createObjectInfo(destBucket, destObject, dstMd)
+	objInfo = meta.CreateObjectInfo(destBucket, destObject, dstMd)
 	return
 }
 
@@ -311,7 +310,7 @@ func (zo *zerostorObjects) GetObjectInfo(bucket, object string) (objInfo minio.O
 		return
 	}
 
-	return createObjectInfo(bucket, object, md), nil
+	return meta.CreateObjectInfo(bucket, object, md), nil
 }
 
 func (zo *zerostorObjects) ListObjects(bucket, prefix, marker, delimiter string,
@@ -344,7 +343,7 @@ func (zo *zerostorObjects) putObject(bucket, object string, rd io.Reader, metada
 		return
 	}
 
-	objInfo = createObjectInfo(bucket, object, md)
+	objInfo = meta.CreateObjectInfo(bucket, object, md)
 	return
 }
 
@@ -384,7 +383,7 @@ func (zo *zerostorObjects) CompleteMultipartUpload(bucket, object, uploadID stri
 		err = zstorToObjectErr(errors.Trace(err), bucket, object)
 		return
 	}
-	info = createObjectInfo(bucket, object, md)
+	info = meta.CreateObjectInfo(bucket, object, md)
 	return
 }
 
@@ -456,29 +455,16 @@ func (zo *zerostorObjects) StorageInfo() (info minio.StorageInfo) {
 	return
 }
 
-func createObjectInfo(bucket, object string, md *metatypes.Metadata) minio.ObjectInfo {
-	return minio.ObjectInfo{
-		Bucket:  bucket,
-		Name:    object,
-		Size:    md.Size, // TODO : returns the actual size
-		ModTime: zstorEpochToTimestamp(md.LastWriteEpoch),
-		// TODO:
-		// ETag:"",
-		// ContentType:
-		// UserDefined
-	}
-}
-
-func (zo *zerostorObjects) getBucket(name string) (*bucket, error) {
-	bkt, ok := zo.bktMgr.get(name)
+func (zo *zerostorObjects) getBucket(name string) (*meta.Bucket, error) {
+	bkt, ok := zo.bktMgr.Get(name)
 	if !ok {
 		return nil, minio.BucketNotFound{}
 	}
 	return bkt, nil
 }
 
-func (zo *zerostorObjects) getAllBuckets() []bucket {
-	return zo.bktMgr.getAllBuckets()
+func (zo *zerostorObjects) getAllBuckets() []meta.Bucket {
+	return zo.bktMgr.GetAllBuckets()
 }
 
 func debugf(format string, args ...interface{}) {
@@ -541,11 +527,6 @@ func zstorToObjectErr(err error, params ...string) error {
 	}
 	e.Cause = err
 	return e
-}
-
-// convert zerostor epoch time to Go timestamp
-func zstorEpochToTimestamp(epoch int64) time.Time {
-	return time.Unix(epoch/1e9, epoch%1e9)
 }
 
 const (

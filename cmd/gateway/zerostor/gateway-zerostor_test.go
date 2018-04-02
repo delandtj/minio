@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"fmt"
+	"sort"
 	"testing"
 
 	"github.com/minio/minio-go/pkg/policy"
@@ -117,7 +118,7 @@ func TestGatewayObjectRoundTrip(t *testing.T) {
 	// copy object - get & check
 	{
 		destBucket := "destBucket"
-		zo.(*zerostorObjects).bktMgr.createBucket(destBucket)
+		zo.(*zerostorObjects).bktMgr.Create(destBucket)
 		_, err := zo.CopyObject(bucket, object, destBucket, object, minio.ObjectInfo{})
 		if err != nil {
 			t.Fatalf("CopyObject failed: %v", err)
@@ -312,11 +313,26 @@ func checkObject(t *testing.T, gateway minio.ObjectLayer, bucket, object string,
 }
 
 func newZstorGateway(namespace, bucket string) (minio.ObjectLayer, func(), error) {
-	zstor, cleanupZstor, err := newTestZerostor(namespace, bucket)
+	zstor, cleanupZstor, metaDir, err := newTestZerostor(namespace, bucket)
 	if err != nil {
 		return nil, nil, err
 	}
-	gl, err := newGatewayLayerWithZerostor(zstor, zstor.filemeta.rootDir)
+	gl, err := newGatewayLayerWithZerostor(zstor, metaDir)
 
 	return gl, cleanupZstor, err
+}
+
+func compareStringArrs(arr1, arr2 []string) error {
+	if len(arr1) != len(arr2) {
+		return fmt.Errorf("different length : %v and %v", len(arr1), len(arr2))
+	}
+	sort.Strings(arr1)
+	sort.Strings(arr2)
+
+	for i, elem := range arr1 {
+		if elem != arr2[i] {
+			return fmt.Errorf("elem %v different : `%v` and `%v`", i, elem, arr2[i])
+		}
+	}
+	return nil
 }

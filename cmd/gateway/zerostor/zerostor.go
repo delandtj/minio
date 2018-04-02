@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	minio "github.com/minio/minio/cmd"
+	"github.com/minio/minio/cmd/gateway/zerostor/meta"
 	"github.com/minio/minio/cmd/gateway/zerostor/multipart"
 	"github.com/zero-os/0-stor/client"
 	"github.com/zero-os/0-stor/client/datastor"
@@ -24,20 +25,20 @@ import (
 // zerostor defines 0-stor storage
 type zerostor struct {
 	storCli  zstorClient
-	bktMgr   *bucketMgr
-	filemeta *filemeta
+	bktMgr   meta.BucketManager
+	metaStor meta.Storage
 }
 
 // newZerostor creates new zerostor object
 func newZerostor(cfg client.Config, metaDir string) (*zerostor, error) {
 	// creates bucket manager
-	bktMgr, err := newBucketMgr(metaDir, multipart.MultipartBucket)
+	bktMgr, err := meta.NewDefaultBucketMgr(metaDir, multipart.MultipartBucket)
 	if err != nil {
 		return nil, err
 	}
 
 	// creates meta client
-	fm, metaCli, err := createMestatorClient(cfg.MetaStor, bktMgr, cfg.Namespace, metaDir)
+	fm, metaCli, err := createMestatorClient(cfg.MetaStor, cfg.Namespace, metaDir)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +59,7 @@ func newZerostor(cfg client.Config, metaDir string) (*zerostor, error) {
 
 	return &zerostor{
 		storCli:  cli,
-		filemeta: fm,
+		metaStor: fm,
 		bktMgr:   bktMgr,
 	}, nil
 }
@@ -82,7 +83,7 @@ func (zc *zerostor) ReadRange(bucket, object string, writer io.Writer, offset, l
 
 // getMeta get metadata of the given bucket-object
 func (zc *zerostor) getMeta(bucket, object string) (*metatypes.Metadata, error) {
-	return zc.filemeta.getDecodeMeta(zc.toZstorKey(bucket, object))
+	return zc.metaStor.GetDecodeMeta(zc.toZstorKey(bucket, object))
 }
 
 // Delete deletes the object
@@ -107,7 +108,7 @@ func (zc *zerostor) Delete(bucket, object string) error {
 
 	// if the deletion failed, we still need to cleanup
 	// the metadata.
-	return zc.filemeta.Delete(nil, zc.toZstorKey(bucket, object))
+	return zc.metaStor.Delete(nil, zc.toZstorKey(bucket, object))
 }
 
 // repair repairs an object
@@ -120,7 +121,7 @@ func (zc *zerostor) repair(bucket, object string) (*metatypes.Metadata, error) {
 
 // ListObjects list object in a bucket
 func (zc *zerostor) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (minio.ListObjectsInfo, error) {
-	return zc.filemeta.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
+	return zc.metaStor.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
 }
 
 // Close closes the this 0-stor client
@@ -130,7 +131,7 @@ func (zc *zerostor) Close() error {
 
 // bucketExist checks if the given bucket is exist
 func (zc *zerostor) bucketExist(bucket string) bool {
-	_, ok := zc.bktMgr.get(bucket)
+	_, ok := zc.bktMgr.Get(bucket)
 	return ok
 }
 
@@ -187,7 +188,7 @@ func createTLSConfigFromDatastorTLSConfig(config *client.DataStorTLSConfig) (*tl
 	return tlsConfig, nil
 }
 
-func createMestatorClient(cfg client.MetaStorConfig, bktMgr *bucketMgr, namespace, metaDir string) (fm *filemeta, mc *metastor.Client, err error) {
+func createMestatorClient(cfg client.MetaStorConfig, namespace, metaDir string) (fm meta.Storage, mc *metastor.Client, err error) {
 	var metaCfg metastor.Config
 
 	// create the metadata encoding func pair
@@ -199,7 +200,7 @@ func createMestatorClient(cfg client.MetaStorConfig, bktMgr *bucketMgr, namespac
 	// create metastor database first,
 	// so that then we can create the Metastor client itself
 	// TODO: support other types of databases (e.g. badger)
-	fm, err = newFilemeta(metaDir, bktMgr, metaCfg.MarshalFuncPair)
+	fm, err = meta.NewDefaultMetastor(metaDir, metaCfg.MarshalFuncPair)
 	if err != nil {
 		return
 	}
