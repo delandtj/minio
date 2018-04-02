@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/minio/cmd/gateway/zerostor/meta"
 	"github.com/zero-os/0-stor/client"
 	"github.com/zero-os/0-stor/client/datastor"
 	"github.com/zero-os/0-stor/client/datastor/pipeline/storage"
@@ -20,12 +21,12 @@ import (
 type inMemZstorClient struct {
 	namespace []byte
 	metaCli   *metastor.Client
-	filemeta  *filemeta
+	filemeta  meta.Storage
 	kv        map[string][]byte
 	mux       sync.Mutex
 }
 
-func newInMemZstorClient(namespace string, metaCli *metastor.Client, fm *filemeta) *inMemZstorClient {
+func newInMemZstorClient(namespace string, metaCli *metastor.Client, fm meta.Storage) *inMemZstorClient {
 	return &inMemZstorClient{
 		namespace: []byte(namespace),
 		metaCli:   metaCli,
@@ -138,23 +139,24 @@ func (zc *inMemZstorClient) Close() error {
 	return nil
 }
 
-func newTestInMemZstorClient(namespace string) (*inMemZstorClient, func(), error) {
+func newTestInMemZstorClient(namespace string) (*inMemZstorClient, meta.Storage, meta.BucketManager, func(), string, error) {
 	metaDir, err := ioutil.TempDir("", "")
 	if err != nil {
-		return nil, nil, err
-	}
-	bktMgr, err := newBucketMgr(metaDir)
-	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, nil, "", err
 	}
 
-	fm, metaCli, err := createMestatorClient(client.MetaStorConfig{}, bktMgr, namespace, metaDir)
+	bktMgr, err := meta.NewDefaultBucketMgr(metaDir)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, nil, "", err
+	}
+
+	fm, metaCli, err := createMestatorClient(client.MetaStorConfig{}, namespace, metaDir)
+	if err != nil {
+		return nil, nil, nil, nil, "", err
 	}
 
 	cleanup := func() {
 		os.RemoveAll(metaDir)
 	}
-	return newInMemZstorClient(namespace, metaCli, fm), cleanup, nil
+	return newInMemZstorClient(namespace, metaCli, fm), fm, bktMgr, cleanup, metaDir, nil
 }

@@ -1,4 +1,4 @@
-package zerostor
+package meta
 
 import (
 	"io/ioutil"
@@ -21,17 +21,17 @@ func TestCreateGetBucketMgr(t *testing.T) {
 
 	// create buckets
 	for _, bucket := range bucketsToCreate {
-		err = bktMgr.createBucket(bucket)
+		err = bktMgr.Create(bucket)
 		if err != nil {
 			t.Errorf("failed to create bucket `%v`: %v", bucket, err)
 		}
 	}
 
-	checkGetBuckets := func(bm *bucketMgr, expectedBuckets []string, msg string) {
+	checkGetBuckets := func(bm BucketManager, expectedBuckets []string, msg string) {
 		t.Log(msg)
 		for _, bucket := range expectedBuckets {
 			// check get bucket
-			bkt, ok := bm.get(bucket)
+			bkt, ok := bm.Get(bucket)
 			if !ok {
 				t.Errorf("failed to get bucket `%v`", bucket)
 			}
@@ -42,7 +42,7 @@ func TestCreateGetBucketMgr(t *testing.T) {
 
 		// check get all buckets
 		var gotBuckets []string
-		for _, bucket := range bm.getAllBuckets() {
+		for _, bucket := range bm.GetAllBuckets() {
 			gotBuckets = append(gotBuckets, bucket.Name)
 		}
 
@@ -67,7 +67,7 @@ func TestCreateGetBucketMgr(t *testing.T) {
 		checkGetBuckets(bktMgr, bucketsToCreate, "check in memory bucket manager")
 
 		// check bucket manager, with all data being loaded from file
-		loadedBktMgr, err := newBucketMgr(metaDir)
+		loadedBktMgr, err := NewDefaultBucketMgr(metaDir)
 		if err != nil {
 			t.Fatalf("failed to load bucket manager: %v", err)
 		}
@@ -79,7 +79,7 @@ func TestCreateGetBucketMgr(t *testing.T) {
 		deleteIdx := 2
 		for i := 0; i < deleteIdx; i++ {
 			bucket := bucketsToCreate[i]
-			err := bktMgr.del(bucket)
+			err := bktMgr.Del(bucket)
 			if err != nil {
 				t.Errorf("failed to delete bucket `%v`: %v", bucket, err)
 			}
@@ -88,7 +88,7 @@ func TestCreateGetBucketMgr(t *testing.T) {
 			"check in memory bucket manager after deletion")
 
 		// check bucket manager, with all data being loaded from file
-		loadedBktMgr, err := newBucketMgr(metaDir)
+		loadedBktMgr, err := NewDefaultBucketMgr(metaDir)
 		if err != nil {
 			t.Fatalf("failed to load bucket manager: %v", err)
 		}
@@ -110,13 +110,13 @@ func TestBucketPolicy(t *testing.T) {
 	)
 
 	// create bucket
-	err = bktMgr.createBucket(bucketName)
+	err = bktMgr.Create(bucketName)
 	if err != nil {
 		t.Errorf("failed to create bucket `%v`: %v", bucketName, err)
 	}
 
 	// get bucket, make sure it's policy is different than `policyToSet`
-	bkt, ok := bktMgr.get(bucketName)
+	bkt, ok := bktMgr.Get(bucketName)
 	if !ok {
 		t.Errorf("failed to get bucket `%v`", bucketName)
 	}
@@ -126,14 +126,14 @@ func TestBucketPolicy(t *testing.T) {
 	}
 
 	// set policy
-	err = bktMgr.setPolicy(bucketName, policyToSet)
+	err = bktMgr.SetPolicy(bucketName, policyToSet)
 	if err != nil {
 		t.Errorf("failed to set bucket policy: %v", err)
 	}
 
-	checkBucketPolicy := func(bm *bucketMgr, msg string) {
+	checkBucketPolicy := func(bm BucketManager, msg string) {
 		t.Log(msg)
-		bkt, ok := bm.get(bucketName)
+		bkt, ok := bm.Get(bucketName)
 		if !ok {
 			t.Errorf("failed to get bucket `%v`", bucketName)
 		}
@@ -145,7 +145,7 @@ func TestBucketPolicy(t *testing.T) {
 	checkBucketPolicy(bktMgr, "check in memory bucket manager")
 
 	// check bucket manager, with all data being loaded from file
-	loadedBktMgr, err := newBucketMgr(metaDir)
+	loadedBktMgr, err := NewDefaultBucketMgr(metaDir)
 	if err != nil {
 		t.Fatalf("failed to load bucket manager: %v", err)
 	}
@@ -153,13 +153,13 @@ func TestBucketPolicy(t *testing.T) {
 	checkBucketPolicy(loadedBktMgr, "check on disk bucket manager")
 }
 
-func newTestBucketMgr() (bktMgr *bucketMgr, metaDir string, err error) {
+func newTestBucketMgr() (bktMgr BucketManager, metaDir string, err error) {
 	metaDir, err = ioutil.TempDir("", "")
 	if err != nil {
 		return
 	}
 
-	bktMgr, err = newBucketMgr(metaDir)
+	bktMgr, err = NewDefaultBucketMgr(metaDir)
 	if err != nil {
 		os.RemoveAll(metaDir)
 	}

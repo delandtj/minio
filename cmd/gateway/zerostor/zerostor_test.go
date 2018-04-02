@@ -21,7 +21,7 @@ func TestZerostorRoundTrip(t *testing.T) {
 	)
 	rand.Read(data)
 
-	zstor, cleanup, err := newTestZerostor(namespace, bucket)
+	zstor, cleanup, _, err := newTestZerostor(namespace, bucket)
 	if err != nil {
 		t.Fatalf("failed to create test zerostor: %v", err)
 	}
@@ -64,20 +64,20 @@ func TestZerostorRoundTrip(t *testing.T) {
 
 }
 
-func newTestZerostor(namespace, bucket string) (*zerostor, func(), error) {
-	zstorCli, cleanup, err := newTestInMemZstorClient(namespace)
+func newTestZerostor(namespace, bucket string) (*zerostor, func(), string, error) {
+	zstorCli, metaStor, bktMgr, cleanup, metaDir, err := newTestInMemZstorClient(namespace)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 
-	err = zstorCli.filemeta.bktMgr.createBucket(bucket)
+	err = bktMgr.Create(bucket)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 
 	return &zerostor{
-		bktMgr:   zstorCli.filemeta.bktMgr,
-		filemeta: zstorCli.filemeta,
+		bktMgr:   bktMgr,
+		metaStor: metaStor,
 		storCli:  zstorCli,
-	}, cleanup, nil
+	}, cleanup, metaDir, nil
 }

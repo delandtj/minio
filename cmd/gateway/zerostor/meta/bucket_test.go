@@ -1,4 +1,4 @@
-package zerostor
+package meta
 
 import (
 	"io/ioutil"
