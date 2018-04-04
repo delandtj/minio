@@ -2,6 +2,7 @@ package zerostor
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"fmt"
 	"sort"
@@ -102,6 +103,9 @@ func TestGatewayObjectRoundTrip(t *testing.T) {
 	}
 	defer cleanup()
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// initialize data fixture
 	data := make([]byte, dataLen)
 	rand.Read(data)
@@ -113,29 +117,29 @@ func TestGatewayObjectRoundTrip(t *testing.T) {
 	}
 
 	// get & check object
-	checkObject(t, zo, bucket, object, data)
+	checkObject(ctx, t, zo, bucket, object, data)
 
 	// copy object - get & check
 	{
 		destBucket := "destBucket"
 		zo.(*zerostorObjects).bktMgr.Create(destBucket)
-		_, err := zo.CopyObject(bucket, object, destBucket, object, minio.ObjectInfo{})
+		_, err := zo.CopyObject(ctx, bucket, object, destBucket, object, minio.ObjectInfo{})
 		if err != nil {
 			t.Fatalf("CopyObject failed: %v", err)
 		}
 
-		checkObject(t, zo, destBucket, object, data)
+		checkObject(ctx, t, zo, destBucket, object, data)
 
 	}
 
 	// delete object
-	err = zo.DeleteObject(bucket, object)
+	err = zo.DeleteObject(ctx, bucket, object)
 	if err != nil {
 		t.Fatalf("failed to delete object:%v", err)
 	}
 
 	// make sure the object is not exist anymore
-	err = zo.GetObject(bucket, object, 0, 0, bytes.NewBuffer(nil), "")
+	err = zo.GetObject(ctx, bucket, object, 0, 0, bytes.NewBuffer(nil), "")
 	if err == nil {
 		t.Fatalf("unexpected error=nil when getting non existed object")
 	}
@@ -156,14 +160,17 @@ func TestDeleteNotExistObject(t *testing.T) {
 	}
 	defer cleanup()
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// make sure the object not exist
-	err = zo.GetObject(bucket, object, 0, 0, bytes.NewBuffer(nil), "")
+	err = zo.GetObject(ctx, bucket, object, 0, 0, bytes.NewBuffer(nil), "")
 	if err == nil {
 		t.Fatalf("unexpected error=nil when getting non existed object")
 	}
 
 	// delete object
-	err = zo.DeleteObject(bucket, object)
+	err = zo.DeleteObject(ctx, bucket, object)
 	if err != nil {
 		t.Fatalf("deleting non existant object should not return error, got: %v", err)
 	}
@@ -183,9 +190,12 @@ func TestGatewayBucketRoundTrip(t *testing.T) {
 	}
 	defer cleanup()
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// create buckets
 	for _, bkt := range buckets[1:] {
-		err = zo.MakeBucketWithLocation(bkt, "")
+		err = zo.MakeBucketWithLocation(ctx, bkt, "")
 		if err != nil {
 			t.Fatalf("create bucket `%v`: %v", bkt, err)
 		}
@@ -193,7 +203,7 @@ func TestGatewayBucketRoundTrip(t *testing.T) {
 
 	// list buckets
 	{
-		bucketsInfo, err := zo.ListBuckets()
+		bucketsInfo, err := zo.ListBuckets(ctx)
 		if err != nil {
 			t.Fatalf("list buckets: %v", err)
 		}
@@ -208,7 +218,7 @@ func TestGatewayBucketRoundTrip(t *testing.T) {
 
 	// get bucket info
 	{
-		info, err := zo.GetBucketInfo(buckets[0])
+		info, err := zo.GetBucketInfo(ctx, buckets[0])
 		if err != nil {
 			t.Fatalf("GetBucket: %v", err)
 		}
@@ -218,12 +228,12 @@ func TestGatewayBucketRoundTrip(t *testing.T) {
 	}
 
 	// delete bucket
-	if err := zo.DeleteBucket(buckets[0]); err != nil {
+	if err := zo.DeleteBucket(ctx, buckets[0]); err != nil {
 		t.Fatalf("DeleteBucket failed: %v", err)
 	}
 
 	// make sure bucket is not exist anymore
-	if _, err := zo.GetBucketInfo(buckets[0]); err == nil {
+	if _, err := zo.GetBucketInfo(ctx, buckets[0]); err == nil {
 		t.Fatalf("expected to get error")
 	}
 }
@@ -240,13 +250,16 @@ func TestGatewayBucketPolicy(t *testing.T) {
 	}
 	defer cleanup()
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// by default, BucketPolicy==None
 	{
-		pol, err := zo.GetBucketPolicy(bucket)
+		pol, err := zo.GetBucketPolicy(ctx, bucket)
 		if err != nil {
 			t.Fatalf("failed to GetBucketPolicy:%v", err)
 		}
-		policies := policy.GetPolicies(pol.Statements, bucket)
+		policies := policy.GetPolicies(pol.Statements, bucket, "")
 		if len(policies) != 0 {
 			t.Fatalf("invalid len policies, expected: 0, got: %v", len(policies))
 		}
@@ -255,17 +268,17 @@ func TestGatewayBucketPolicy(t *testing.T) {
 		// set bucket policy & then check bucket policy
 		var pol policy.BucketAccessPolicy
 		pol.Statements = policy.SetPolicy(pol.Statements, policy.BucketPolicyReadOnly, bucket, "")
-		err = zo.SetBucketPolicy(bucket, pol)
+		err = zo.SetBucketPolicy(ctx, bucket, pol)
 		if err != nil {
 			t.Fatalf("failed to SetBucketPolicy")
 		}
 
 		// get bucket policy
-		pol, err := zo.GetBucketPolicy(bucket)
+		pol, err := zo.GetBucketPolicy(ctx, bucket)
 		if err != nil {
 			t.Fatalf("failed to GetBucketPolicy:%v", err)
 		}
-		policies := policy.GetPolicies(pol.Statements, bucket)
+		policies := policy.GetPolicies(pol.Statements, bucket, "")
 		if len(policies) != 1 {
 			t.Fatalf("invalid len policies, expected: 1, got: %v", len(policies))
 		}
@@ -279,16 +292,16 @@ func TestGatewayBucketPolicy(t *testing.T) {
 	}
 	{
 		//delete bucket and make sure the policy back to none
-		err = zo.DeleteBucketPolicy(bucket)
+		err = zo.DeleteBucketPolicy(ctx, bucket)
 		if err != nil {
 			t.Fatalf("failed to DeleteBucketPolicy: %v", err)
 		}
 
-		pol, err := zo.GetBucketPolicy(bucket)
+		pol, err := zo.GetBucketPolicy(ctx, bucket)
 		if err != nil {
 			t.Fatalf("failed to GetBucketPolicy:%v", err)
 		}
-		policies := policy.GetPolicies(pol.Statements, bucket)
+		policies := policy.GetPolicies(pol.Statements, bucket, "")
 		if len(policies) != 0 {
 			t.Fatalf("invalid len policies, expected: 0, got: %v", len(policies))
 		}
@@ -296,10 +309,10 @@ func TestGatewayBucketPolicy(t *testing.T) {
 	}
 }
 
-func checkObject(t *testing.T, gateway minio.ObjectLayer, bucket, object string, expected []byte) {
+func checkObject(ctx context.Context, t *testing.T, gateway minio.ObjectLayer, bucket, object string, expected []byte) {
 	buf := bytes.NewBuffer(nil)
 
-	err := gateway.GetObject(bucket, object, 0, int64(len(expected)), buf, "")
+	err := gateway.GetObject(ctx, bucket, object, 0, int64(len(expected)), buf, "")
 	if err != nil {
 		t.Fatalf("failed to GetObject: %v", err)
 	}

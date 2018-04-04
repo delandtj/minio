@@ -29,8 +29,3 @@
 | AbortMultipart          | v   | v   | v   |
 | ListObjectParts         | v   |     | v   |
 | ListMultipartUpload     | v   |     | v   | only respect `bucket` argument, because of lack of docs & example in production ready gateway.                      |
-| ------------------      | -   | -   | -   | ----------------------------------                                                                                  |
-| Heal Bucket             | v   | v   | -   | always return true                                                                                                  |
-| Heal Object             | v   |     |     |
-| List Object Heal        | -   | -   |     | Not supported by 0-stor, other minio gateways also doesn't implement                                                |
-| List Bucket Heal        | -   | -   |     | Not supported by 0-stor, other minio gateways also doesn't implement                                                |

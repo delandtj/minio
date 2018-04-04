@@ -15,7 +15,6 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
-	"github.com/minio/minio/pkg/madmin"
 
 	"github.com/zero-os/0-stor/client"
 	"github.com/zero-os/0-stor/client/datastor"
@@ -414,39 +413,6 @@ func (zo *zerostorObjects) ListObjectParts(ctx context.Context, bucket, object, 
 		log.Println("ListObjectParts failed: %v", err)
 	}
 	return
-}
-
-// HealObject implements ObjectLayer.HealObject
-func (zo *zerostorObjects) HealObject(ctx context.Context, bucket, object string, dryRun bool) (madmin.HealResultItem, error) {
-	log.Printf("healObject %v/%v dryRun=%v\n", bucket, object, dryRun)
-
-	md, err := zo.zstor.getMeta(bucket, object)
-	if err != nil {
-		return madmin.HealResultItem{}, zstorToObjectErr(errors.Trace(err), bucket, object)
-	}
-
-	res := madmin.HealResultItem{
-		Bucket: bucket,
-		Object: object,
-		Type:   madmin.HealItemObject,
-		//ObjectSize : get from the metadata
-		//DiskCount: len(md.Chunks[0].Objects),
-	}
-
-	if dryRun {
-		_, err = zo.zstor.storCli.CheckWithMeta(*md, false)
-		if err != nil {
-			return res, zstorToObjectErr(errors.Trace(err), bucket, object)
-		}
-		return res, nil
-	}
-
-	_, err = zo.zstor.repair(bucket, object)
-	if err != nil {
-		return res, zstorToObjectErr(errors.Trace(err), bucket, object)
-	}
-	return res, nil
-
 }
 
 func (zo *zerostorObjects) Shutdown(ctx context.Context) error {
