@@ -7,7 +7,10 @@ import (
 	"io"
 	"io/ioutil"
 	"path/filepath"
+	"strconv"
+	"strings"
 
+	"github.com/garyburd/redigo/redis"
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/cmd/gateway/zerostor/meta"
 	"github.com/minio/minio/cmd/gateway/zerostor/multipart"
@@ -24,13 +27,19 @@ import (
 
 // zerostor defines 0-stor storage
 type zerostor struct {
-	storCli  zstorClient
-	bktMgr   meta.BucketManager
-	metaStor meta.Storage
+	storCli   zstorClient
+	bktMgr    meta.BucketManager
+	metaStor  meta.Storage
+	zdbShards []string
+	namespace string
 }
 
 // newZerostor creates new zerostor object
 func newZerostor(cfg client.Config, metaDir string) (*zerostor, error) {
+	if cfg.Namespace == "" {
+		return nil, fmt.Errorf("empty namespace")
+	}
+
 	// creates bucket manager
 	bktMgr, err := meta.NewDefaultBucketMgr(metaDir, multipart.MultipartBucket)
 	if err != nil {
@@ -58,9 +67,11 @@ func newZerostor(cfg client.Config, metaDir string) (*zerostor, error) {
 	cli := client.NewClient(metaCli, dataPipeline)
 
 	return &zerostor{
-		storCli:  cli,
-		metaStor: fm,
-		bktMgr:   bktMgr,
+		storCli:   cli,
+		metaStor:  fm,
+		bktMgr:    bktMgr,
+		zdbShards: cfg.DataStor.Shards,
+		namespace: cfg.Namespace,
 	}, nil
 }
 
@@ -122,6 +133,60 @@ func (zc *zerostor) repair(bucket, object string) (*metatypes.Metadata, error) {
 // ListObjects list object in a bucket
 func (zc *zerostor) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (minio.ListObjectsInfo, error) {
 	return zc.metaStor.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
+}
+
+// StorageInfo returns information about current storage
+func (zc *zerostor) StorageInfo() (minio.StorageInfo, error) {
+	var (
+		err   error
+		used  uint64
+		total uint64
+	)
+
+	// iterate all shards, get info from each of it
+	// returns immediately once we got an answer
+	for _, shard := range zc.zdbShards {
+		used, total, err = func() (used, total uint64, err error) {
+			// get conn
+			conn, err := redis.Dial("tcp", shard)
+			if err != nil {
+				return
+			}
+			// request the info
+			nsinfo, err := redis.String(conn.Do("NSINFO", zc.namespace))
+			if err != nil {
+				return
+			}
+			// parse the info
+			for _, line := range strings.Split(nsinfo, "\n") {
+				elems := strings.Split(line, ":")
+				if len(elems) != 2 {
+					continue
+				}
+				val := strings.TrimSpace(elems[1])
+				switch strings.TrimSpace(elems[0]) {
+				case "data_size_bytes":
+					used, err = strconv.ParseUint(val, 10, 64)
+				case "data_limits_bytes":
+					total, err = strconv.ParseUint(val, 10, 64)
+				}
+				if err != nil {
+					return
+				}
+			}
+			return
+		}()
+		if err == nil {
+			if total == 0 {
+				total = used + 10e14 // default free =  1PB
+			}
+			return minio.StorageInfo{
+				Total: total,
+				Free:  total - used,
+			}, nil
+		}
+	}
+	return minio.StorageInfo{}, err
 }
 
 // Close closes the this 0-stor client

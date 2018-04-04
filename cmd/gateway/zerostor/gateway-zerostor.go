@@ -415,12 +415,18 @@ func (zo *zerostorObjects) ListObjectParts(ctx context.Context, bucket, object, 
 	return
 }
 
+// Shutdown implements ObjectLayer.Shutdown
 func (zo *zerostorObjects) Shutdown(ctx context.Context) error {
 	return zo.zstor.Close()
 }
 
+// StorageInfo implements ObjectLayer.StorageInfo
 func (zo *zerostorObjects) StorageInfo(ctx context.Context) (info minio.StorageInfo) {
 	log.Println("StorageInfo")
+	info, err := zo.zstor.StorageInfo()
+	if err != nil {
+		log.Printf("StorageInfo failed: %v", err)
+	}
 	return
 }
 
