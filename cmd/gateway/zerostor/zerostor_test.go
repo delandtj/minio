@@ -63,7 +63,43 @@ func TestZerostorRoundTrip(t *testing.T) {
 	}
 
 }
+func TestParseNsInfo(t *testing.T) {
+	testCases := []struct {
+		name   string
+		nsInfo string
+		total  uint64
+		used   uint64
+	}{
+		{
+			name:   "max data size is not set",
+			nsInfo: "# namespace\nname: thedisk\nentries: 37\npublic: yes\npassword: no\ndata_size_bytes: 141652\ndata_size_mb: 0.14\ndata_limits_bytes: 0\nindex_size_bytes: 1998\nindex_size_kb: 1.95\n",
+			total:  defaultNamespaceMaxSize,
+			used:   141652,
+		},
 
+		{
+			name:   "max data size is set",
+			nsInfo: "# namespace\nname: thedisk\nentries: 37\npublic: yes\npassword: no\ndata_size_bytes: 141652\ndata_size_mb: 0.14\ndata_limits_bytes: 1234567891234\nindex_size_bytes: 1998\nindex_size_kb: 1.95\n",
+			total:  1234567891234,
+			used:   141652,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			total, used, err := parseNsInfo(tc.nsInfo)
+			if err != nil {
+				t.Fatalf("failed to parse ns info:%v", err)
+			}
+
+			if used != tc.used {
+				t.Fatalf("invalid used value: %v, expected: %v", used, tc.used)
+			}
+			if total != tc.total {
+				t.Fatalf("invalid total:%v, expected: %v", total, tc.total)
+			}
+		})
+	}
+}
 func newTestZerostor(namespace, bucket string) (*zerostor, func(), string, error) {
 	zstorCli, metaStor, bktMgr, cleanup, metaDir, err := newTestInMemZstorClient(namespace)
 	if err != nil {

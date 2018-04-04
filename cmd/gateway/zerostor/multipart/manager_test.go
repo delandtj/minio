@@ -143,6 +143,16 @@ func TestManagerAbort(t *testing.T) {
 			t.Fatalf("part `%v` still exist", part.PartNumber)
 		}
 	}
+
+	// verify there is no listed uploads after abort
+	uploads, err := mgr.ListUpload(bucket, "", "", "", "", 1000)
+	if err != nil {
+		t.Fatalf("ListUpload failed: %v", err)
+	}
+
+	if len(uploads.Uploads) != 0 {
+		t.Fatalf("invalid uploads len after abort: %v, expected: 0", len(uploads.Uploads))
+	}
 }
 
 func TestManagerListPart(t *testing.T) {

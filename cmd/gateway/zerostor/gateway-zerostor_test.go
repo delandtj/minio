@@ -145,6 +145,59 @@ func TestGatewayObjectRoundTrip(t *testing.T) {
 	}
 }
 
+func TestGatewayListObject(t *testing.T) {
+	const (
+		namespace = "ns"
+		bucket    = "buket"
+		dataLen   = 4096
+		numObject = 10
+	)
+	zo, cleanup, err := newZstorGateway(namespace, bucket)
+	if err != nil {
+		t.Fatalf("failed to create gateway:%v", err)
+	}
+	defer cleanup()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var (
+		data        = make([]byte, dataLen)
+		objectNames []string
+	)
+	// initialize data fixture
+	rand.Read(data)
+
+	// list objects, must be empty
+	listResults, err := zo.ListObjects(ctx, bucket, "", "", "", 1000)
+	if err != nil {
+		t.Fatalf("ListObjects failed: %v", err)
+	}
+	if len(listResults.Objects) != 0 {
+		t.Fatalf("objects should be empty, got: %v objects", len(listResults.Objects))
+	}
+
+	// upload objects
+	for i := 0; i < numObject; i++ {
+		object := fmt.Sprintf("object_%v", i)
+		_, err = zo.(*zerostorObjects).putObject(bucket, object, bytes.NewReader(data), nil)
+		if err != nil {
+			t.Fatalf("failed to put object = %v", err)
+		}
+		objectNames = append(objectNames, object)
+	}
+
+	// list objects, must have all uploaded objects
+	listResults, err = zo.ListObjects(ctx, bucket, "", "", "", 1000)
+	if err != nil {
+		t.Fatalf("ListObjects failed: %v", err)
+	}
+	if len(listResults.Objects) != numObject {
+		t.Fatalf("invalid objects leng: %v, expected: %v", len(listResults.Objects), numObject)
+	}
+
+}
+
 // Test Deleting non existant object.
 // it shouldn't return error
 func TestDeleteNotExistObject(t *testing.T) {
@@ -309,10 +362,213 @@ func TestGatewayBucketPolicy(t *testing.T) {
 	}
 }
 
+func TestMultipartUploadComplete(t *testing.T) {
+	const (
+		namespace = "ns"
+		bucket    = "bucket"
+		object    = "object"
+		dataLen   = 1000
+		numPart   = 100
+	)
+
+	zo, cleanup, err := newZstorGateway(namespace, bucket)
+	if err != nil {
+		t.Fatalf("failed to create gateway:%v", err)
+	}
+	defer cleanup()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// init the data we want to upload
+	var (
+		data    = make([]byte, dataLen)
+		partLen = dataLen / numPart
+	)
+	rand.Read(data)
+
+	// Create Upload
+	uploadID, err := zo.NewMultipartUpload(ctx, bucket, object, nil)
+	if err != nil {
+		t.Fatalf("NewMultipartUpload failed: %v", err)
+	}
+
+	// Upload each part
+	var uploadParts []minio.PartInfo
+	for i := 0; i < numPart; i++ {
+		etag := minio.GenETag()
+		rd := bytes.NewReader(data[i*partLen : (i*partLen)+partLen])
+		part, err := zo.(*zerostorObjects).putObjectPart(ctx, bucket, object, uploadID, etag, i, rd)
+		if err != nil {
+			t.Fatalf("failed to PutObjectPart %v, err: %v", i, err)
+		}
+		uploadParts = append(uploadParts, part)
+	}
+
+	// Complete the upload
+	var completeParts []minio.CompletePart
+	for _, part := range uploadParts {
+		completeParts = append(completeParts, minio.CompletePart{
+			PartNumber: part.PartNumber,
+			ETag:       part.ETag,
+		})
+	}
+	_, err = zo.CompleteMultipartUpload(ctx, bucket, object, uploadID, completeParts)
+	if err != nil {
+		t.Fatalf("failed to CompleteMultipartUpload:%v", err)
+	}
+
+	// check the uploaded object
+	checkObject(ctx, t, zo, bucket, object, data)
+
+	// ListMultipartUploads must return empty after the upload being completed
+	listUpload, err := zo.ListMultipartUploads(ctx, bucket, "", "", "", "", 1000)
+	if err != nil {
+		t.Fatalf("ListMultipartUploads failed: %v", err)
+	}
+
+	// check uploadID of the listed multipart uploads
+	if len(listUpload.Uploads) != 0 {
+		t.Fatalf("invalid num uploads after complete: %v, expected: 0", len(listUpload.Uploads))
+	}
+
+}
+
+func TestMultipartUploadListAbort(t *testing.T) {
+	const (
+		namespace  = "ns"
+		bucket     = "bucket"
+		dataLen    = 1000
+		numPart    = 100
+		numUploads = 10
+	)
+
+	zo, cleanup, err := newZstorGateway(namespace, bucket)
+	if err != nil {
+		t.Fatalf("failed to create gateway:%v", err)
+	}
+	defer cleanup()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// init the data we want to upload
+	var (
+		datas            = make(map[string][]byte)
+		partLen          = dataLen / numPart
+		uploadIDs        = make(map[string]struct{})
+		uploadedPartsMap = make(map[string][]minio.PartInfo)
+	)
+
+	// do upload
+	for i := 0; i < numUploads; i++ {
+		var (
+			data   = make([]byte, dataLen)
+			object = fmt.Sprintf("object_%v", i)
+		)
+		rand.Read(data)
+
+		// Create Upload
+		uploadID, err := zo.NewMultipartUpload(ctx, bucket, object, nil)
+		if err != nil {
+			t.Fatalf("NewMultipartUpload failed: %v", err)
+		}
+		uploadIDs[uploadID] = struct{}{}
+		datas[uploadID] = data
+
+		// Upload each part
+		var parts []minio.PartInfo
+		for i := 0; i < numPart; i++ {
+			etag := minio.GenETag()
+			rd := bytes.NewReader(data[i*partLen : (i*partLen)+partLen])
+			part, err := zo.(*zerostorObjects).putObjectPart(ctx, bucket, object, uploadID, etag, i, rd)
+			if err != nil {
+				t.Fatalf("failed to PutObjectPart %v, err: %v", i, err)
+			}
+			parts = append(parts, part)
+		}
+		uploadedPartsMap[uploadID] = parts
+	}
+
+	// ListMultipartUpload
+	uploads, err := zo.ListMultipartUploads(ctx, bucket, "", "", "", "", 1000)
+	if err != nil {
+		t.Fatalf("ListMultipartUploads failed: %v", err)
+	}
+
+	// check uploadID of the listed multipart uploads
+	if len(uploads.Uploads) != numUploads {
+		t.Fatalf("invalid num uploads: %v, expected: %v", len(uploads.Uploads), numUploads)
+	}
+	for i, upload := range uploads.Uploads {
+		if _, ok := uploadIDs[upload.UploadID]; !ok {
+			t.Fatalf("Invalid uploadID of part %v: %v", i, upload.UploadID)
+		}
+	}
+
+	// check object parts
+	for _, upload := range uploads.Uploads {
+		listPartsResult, err := zo.ListObjectParts(ctx, bucket, upload.Object, upload.UploadID, 0, 1000)
+		if err != nil {
+			t.Fatalf("Failed to ListObjectPart of upload ID:%v, err: %v", upload.UploadID, err)
+		}
+
+		listedParts := listPartsResult.Parts
+		// check the parts
+		uploadedParts := uploadedPartsMap[upload.UploadID]
+		if len(uploadedParts) != len(listedParts) {
+			t.Fatalf("invalid number of parts of upload ID `%v`: %v, expected: %v", upload.UploadID, len(uploadedParts), len(listedParts))
+		}
+
+		for i, part := range uploadedParts {
+			if part.PartNumber != listedParts[i].PartNumber {
+				t.Fatalf("invalid part number of uploadID `%v`: %v, expected: %v",
+					upload.UploadID, listedParts[i].PartNumber, part.PartNumber)
+			}
+			if part.ETag != listedParts[i].ETag {
+				t.Fatalf("invalid etag of uploadID `%v`: %v, expected: %v",
+					upload.UploadID, listedParts[i].ETag, part.ETag)
+			}
+		}
+	}
+
+	// AbortMultipartUpload
+	for _, upload := range uploads.Uploads {
+		err = zo.AbortMultipartUpload(ctx, bucket, upload.Object, upload.UploadID)
+		if err != nil {
+			t.Fatalf("failed to AbortMultipartUpload uploadID `%v`: %v", upload.UploadID, err)
+		}
+	}
+
+	// ListMultipartUploads must return empty after all uploads being aborted
+	uploadsAfterAbort, err := zo.ListMultipartUploads(ctx, bucket, "", "", "", "", 1000)
+	if err != nil {
+		t.Fatalf("ListMultipartUploads failed: %v", err)
+	}
+
+	// check uploadID of the listed multipart uploads
+	if len(uploadsAfterAbort.Uploads) != 0 {
+		t.Fatalf("invalid num uploads after abort: %v, expected: 0", len(uploadsAfterAbort.Uploads))
+	}
+
+}
 func checkObject(ctx context.Context, t *testing.T, gateway minio.ObjectLayer, bucket, object string, expected []byte) {
 	buf := bytes.NewBuffer(nil)
 
-	err := gateway.GetObject(ctx, bucket, object, 0, int64(len(expected)), buf, "")
+	// get object info
+	info, err := gateway.GetObjectInfo(ctx, bucket, object)
+	if err != nil {
+		t.Fatalf("failed to getObjectInfo(%v,%v): %v", bucket, object, err)
+	}
+	if info.Bucket != bucket {
+		t.Fatalf("invalid bucket: %v, expected: %v", info.Bucket, bucket)
+	}
+	if info.Name != object {
+		t.Fatalf("invalid object name: %v, expected: %v", info.Name, object)
+	}
+
+	// check object content
+	err = gateway.GetObject(ctx, bucket, object, 0, int64(len(expected)), buf, "")
 	if err != nil {
 		t.Fatalf("failed to GetObject: %v", err)
 	}

@@ -1,11 +1,8 @@
 package zerostor
 
 import (
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -122,14 +119,6 @@ func (zc *zerostor) Delete(bucket, object string) error {
 	return zc.metaStor.Delete(nil, zc.toZstorKey(bucket, object))
 }
 
-// repair repairs an object
-func (zc *zerostor) repair(bucket, object string) (*metatypes.Metadata, error) {
-	if !zc.bucketExist(bucket) {
-		return nil, minio.BucketNotFound{}
-	}
-	return zc.storCli.Repair(zc.toZstorKey(bucket, object))
-}
-
 // ListObjects list object in a bucket
 func (zc *zerostor) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (minio.ListObjectsInfo, error) {
 	return zc.metaStor.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
@@ -157,29 +146,10 @@ func (zc *zerostor) StorageInfo() (minio.StorageInfo, error) {
 			if err != nil {
 				return
 			}
-			// parse the info
-			for _, line := range strings.Split(nsinfo, "\n") {
-				elems := strings.Split(line, ":")
-				if len(elems) != 2 {
-					continue
-				}
-				val := strings.TrimSpace(elems[1])
-				switch strings.TrimSpace(elems[0]) {
-				case "data_size_bytes":
-					used, err = strconv.ParseUint(val, 10, 64)
-				case "data_limits_bytes":
-					total, err = strconv.ParseUint(val, 10, 64)
-				}
-				if err != nil {
-					return
-				}
-			}
+			total, used, err = parseNsInfo(nsinfo)
 			return
 		}()
 		if err == nil {
-			if total == 0 {
-				total = used + 10e14 // default free =  1PB
-			}
 			return minio.StorageInfo{
 				Total: total,
 				Free:  total - used,
@@ -194,6 +164,31 @@ func (zc *zerostor) Close() error {
 	return zc.storCli.Close()
 }
 
+func parseNsInfo(nsinfo string) (total, used uint64, err error) {
+	// parse the info
+	for _, line := range strings.Split(nsinfo, "\n") {
+		elems := strings.Split(line, ":")
+		if len(elems) != 2 {
+			continue
+		}
+		val := strings.TrimSpace(elems[1])
+		switch strings.TrimSpace(elems[0]) {
+		case "data_size_bytes":
+			used, err = strconv.ParseUint(val, 10, 64)
+		case "data_limits_bytes":
+			total, err = strconv.ParseUint(val, 10, 64)
+		}
+		if err != nil {
+			return
+		}
+	}
+	if total == 0 {
+		total = defaultNamespaceMaxSize
+	}
+
+	return
+}
+
 // bucketExist checks if the given bucket is exist
 func (zc *zerostor) bucketExist(bucket string) bool {
 	_, ok := zc.bktMgr.Get(bucket)
@@ -206,51 +201,7 @@ func (zc *zerostor) toZstorKey(bucket, object string) []byte {
 }
 
 func createDataClusterFromConfig(cfg *client.Config) (datastor.Cluster, error) {
-	// optionally create the global datastor TLS config
-	tlsConfig, err := createTLSConfigFromDatastorTLSConfig(&cfg.DataStor.TLS)
-	if err != nil {
-		return nil, err
-	}
-
-	return zerodb.NewCluster(cfg.DataStor.Shards, cfg.Password, cfg.Namespace, tlsConfig)
-}
-
-func createTLSConfigFromDatastorTLSConfig(config *client.DataStorTLSConfig) (*tls.Config, error) {
-	if config == nil || !config.Enabled {
-		return nil, nil
-	}
-	tlsConfig := &tls.Config{
-		MinVersion: config.MinVersion.VersionTLSOrDefault(tls.VersionTLS11),
-		MaxVersion: config.MaxVersion.VersionTLSOrDefault(tls.VersionTLS12),
-	}
-
-	if config.ServerName != "" {
-		tlsConfig.ServerName = config.ServerName
-	} else {
-		log.Println("TLS is configured to skip verificaitons of certs, " +
-			"making the client susceptible to man-in-the-middle attacks!!!")
-		tlsConfig.InsecureSkipVerify = true
-	}
-
-	if config.RootCA == "" {
-		var err error
-		tlsConfig.RootCAs, err = x509.SystemCertPool()
-		if err != nil {
-			return nil, fmt.Errorf("failed to create datastor TLS config: %v", err)
-		}
-	} else {
-		tlsConfig.RootCAs = x509.NewCertPool()
-		caFile, err := ioutil.ReadFile(config.RootCA)
-		if err != nil {
-			return nil, err
-		}
-		if !tlsConfig.RootCAs.AppendCertsFromPEM(caFile) {
-			return nil, fmt.Errorf("error reading CA file '%s', while creating datastor TLS config: %v",
-				config.RootCA, err)
-		}
-	}
-
-	return tlsConfig, nil
+	return zerodb.NewCluster(cfg.DataStor.Shards, cfg.Password, cfg.Namespace, nil)
 }
 
 func createMestatorClient(cfg client.MetaStorConfig, namespace, metaDir string) (fm meta.Storage, mc *metastor.Client, err error) {
@@ -295,3 +246,7 @@ func createMestatorClient(cfg client.MetaStorConfig, namespace, metaDir string) 
 	mc, err = metastor.NewClient([]byte(namespace), metaCfg)
 	return
 }
+
+const (
+	defaultNamespaceMaxSize = 10e14 // default max size =  1PB
+)

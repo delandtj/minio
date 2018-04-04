@@ -144,7 +144,7 @@ func (m *manager) Complete(bucket, object, uploadID string, parts []minio.Comple
 	}
 
 	// clean metadata
-	return md, nil
+	return md, m.metaMgr.Clean(bucket, uploadID)
 }
 
 // Abort implements Manager.Abort
@@ -165,7 +165,7 @@ func (m *manager) Abort(bucket, object, uploadID string) error {
 		// another tools should do metadata cleanup
 		m.metaMgr.DelPart(bucket, uploadID, part.ETag, part.PartNumber)
 	}
-	return nil
+	return m.metaMgr.Clean(bucket, uploadID)
 }
 
 // ListUpload implements Manager.ListUpload

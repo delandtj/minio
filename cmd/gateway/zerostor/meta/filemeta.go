@@ -138,6 +138,10 @@ func (fm *filemeta) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 	// check, it is a file or dir
 	fi, err := os.Stat(dir)
 	if err != nil {
+		if prefix == "" { // if root bucket, no need to return error
+			err = nil
+			return
+		}
 		if os.IsNotExist(err) {
 			err = db.ErrNotFound
 		}

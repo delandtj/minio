@@ -367,7 +367,11 @@ func (zo *zerostorObjects) PutObjectPart(ctx context.Context, bucket, object, up
 	if etag == "" {
 		etag = minio.GenETag()
 	}
-	info, err = zo.multipartMgr.UploadPart(bucket, object, uploadID, etag, partID, data)
+	return zo.putObjectPart(ctx, bucket, object, uploadID, etag, partID, data)
+}
+
+func (zo *zerostorObjects) putObjectPart(ctx context.Context, bucket, object, uploadID, etag string, partID int, rd io.Reader) (info minio.PartInfo, err error) {
+	info, err = zo.multipartMgr.UploadPart(bucket, object, uploadID, etag, partID, rd)
 	if err != nil {
 		log.Printf("PutObjectPart id:%v, partID:%v, err: %v\n", uploadID, partID, err)
 		err = zstorToObjectErr(errors.Trace(err), bucket, object)
