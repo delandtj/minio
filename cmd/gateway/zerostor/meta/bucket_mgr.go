@@ -62,7 +62,7 @@ func NewDefaultBucketMgr(metaDir string, specialBuckets ...string) (BucketManage
 
 	// creates special bucket
 	for _, bucket := range specialBuckets {
-		if _, ok := mgr.Get(bucket); ok {
+		if _, err := mgr.Get(bucket); err == nil {
 			continue
 		}
 
@@ -96,12 +96,12 @@ func (bm *bucketMgr) Create(bucket string) error {
 }
 
 // Get implements bucketManager.Get interface
-func (bm *bucketMgr) Get(bucket string) (*Bucket, bool) {
+func (bm *bucketMgr) Get(bucket string) (*Bucket, error) {
 	bkt, ok := bm.get(bucket)
 	if !ok {
-		return nil, false
+		return nil, minio.BucketNotFound{}
 	}
-	return &bkt.Bucket, true
+	return &bkt.Bucket, nil
 }
 func (bm *bucketMgr) get(bucket string) (*bucket, bool) {
 	bm.mux.RLock()
@@ -111,7 +111,7 @@ func (bm *bucketMgr) get(bucket string) (*bucket, bool) {
 }
 
 // GetAllBuckets implements bucketManager.GetAllBuckets interface
-func (bm *bucketMgr) GetAllBuckets() []Bucket {
+func (bm *bucketMgr) GetAllBuckets() ([]Bucket, error) {
 	bm.mux.RLock()
 	defer bm.mux.RUnlock()
 
@@ -121,7 +121,7 @@ func (bm *bucketMgr) GetAllBuckets() []Bucket {
 			buckets = append(buckets, bkt.Bucket)
 		}
 	}
-	return buckets
+	return buckets, nil
 }
 
 // del deletes a bucket

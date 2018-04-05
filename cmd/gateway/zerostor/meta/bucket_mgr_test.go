@@ -31,9 +31,9 @@ func TestCreateGetBucketMgr(t *testing.T) {
 		t.Log(msg)
 		for _, bucket := range expectedBuckets {
 			// check get bucket
-			bkt, ok := bm.Get(bucket)
-			if !ok {
-				t.Errorf("failed to get bucket `%v`", bucket)
+			bkt, err := bm.Get(bucket)
+			if err != nil {
+				t.Errorf("failed to get bucket `%v`:%v", bucket, err)
 			}
 			if bkt.Name != bucket {
 				t.Errorf("invalid bucket name: %v, expected: %v", bkt.Name, bucket)
@@ -42,7 +42,11 @@ func TestCreateGetBucketMgr(t *testing.T) {
 
 		// check get all buckets
 		var gotBuckets []string
-		for _, bucket := range bm.GetAllBuckets() {
+		allBuckets, err := bm.GetAllBuckets()
+		if err != nil {
+			t.Fatalf("failed to GetAllBuckets:%v", err)
+		}
+		for _, bucket := range allBuckets {
 			gotBuckets = append(gotBuckets, bucket.Name)
 		}
 
@@ -116,9 +120,9 @@ func TestBucketPolicy(t *testing.T) {
 	}
 
 	// get bucket, make sure it's policy is different than `policyToSet`
-	bkt, ok := bktMgr.Get(bucketName)
-	if !ok {
-		t.Errorf("failed to get bucket `%v`", bucketName)
+	bkt, err := bktMgr.Get(bucketName)
+	if err != nil {
+		t.Errorf("failed to get bucket `%v`: %v", bucketName, err)
 	}
 
 	if bkt.Policy == policyToSet {
@@ -133,9 +137,9 @@ func TestBucketPolicy(t *testing.T) {
 
 	checkBucketPolicy := func(bm BucketManager, msg string) {
 		t.Log(msg)
-		bkt, ok := bm.Get(bucketName)
-		if !ok {
-			t.Errorf("failed to get bucket `%v`", bucketName)
+		bkt, err := bm.Get(bucketName)
+		if err != nil {
+			t.Errorf("failed to get bucket `%v`: %v", bucketName, err)
 		}
 		if bkt.Policy != policyToSet {
 			t.Errorf("bad policy value: %v, expected: %v", bkt.Policy, policyToSet)

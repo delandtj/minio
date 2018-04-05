@@ -29,11 +29,11 @@ type BucketManager interface {
 	// Create creates a bucket
 	Create(bucket string) error
 
-	// Get gets a bucket, return false if not exist
-	Get(bucket string) (*Bucket, bool)
+	// Get gets a bucket
+	Get(bucket string) (*Bucket, error)
 
 	// GetAllBuckets returns all buckets
-	GetAllBuckets() []Bucket
+	GetAllBuckets() ([]Bucket, error)
 
 	// Del deletes a bucket
 	Del(bucket string) error

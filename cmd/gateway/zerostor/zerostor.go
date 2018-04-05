@@ -191,8 +191,8 @@ func parseNsInfo(nsinfo string) (total, used uint64, err error) {
 
 // bucketExist checks if the given bucket is exist
 func (zc *zerostor) bucketExist(bucket string) bool {
-	_, ok := zc.bktMgr.Get(bucket)
-	return ok
+	_, err := zc.bktMgr.Get(bucket)
+	return err == nil
 }
 
 // toZstorKey generates 0-stor key from the given bucket/object

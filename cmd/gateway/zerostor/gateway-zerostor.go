@@ -179,14 +179,21 @@ func (zo *zerostorObjects) DeleteBucket(ctx context.Context, bucket string) erro
 	return zstorToObjectErr(errors.Trace(err), bucket)
 }
 
-func (zo *zerostorObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInfo, err error) {
-	for _, bkt := range zo.getAllBuckets() {
+func (zo *zerostorObjects) ListBuckets(ctx context.Context) ([]minio.BucketInfo, error) {
+	allBuckets, err := zo.bktMgr.GetAllBuckets()
+	if err != nil {
+		return nil, zstorToObjectErr(errors.Trace(err))
+	}
+
+	var buckets []minio.BucketInfo
+
+	for _, bkt := range allBuckets {
 		buckets = append(buckets, minio.BucketInfo{
 			Name:    bkt.Name,
 			Created: bkt.Created,
 		})
 	}
-	return
+	return buckets, nil
 }
 
 func (zo *zerostorObjects) MakeBucketWithLocation(ctx context.Context, bucket string, location string) error {
@@ -435,15 +442,7 @@ func (zo *zerostorObjects) StorageInfo(ctx context.Context) (info minio.StorageI
 }
 
 func (zo *zerostorObjects) getBucket(name string) (*meta.Bucket, error) {
-	bkt, ok := zo.bktMgr.Get(name)
-	if !ok {
-		return nil, minio.BucketNotFound{}
-	}
-	return bkt, nil
-}
-
-func (zo *zerostorObjects) getAllBuckets() []meta.Bucket {
-	return zo.bktMgr.GetAllBuckets()
+	return zo.bktMgr.Get(name)
 }
 
 func debugf(format string, args ...interface{}) {
