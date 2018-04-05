@@ -163,7 +163,7 @@ type zerostorObjects struct {
 }
 
 func (zo *zerostorObjects) GetBucketInfo(ctx context.Context, bucket string) (bucketInfo minio.BucketInfo, err error) {
-	bkt, err := zo.getBucket(bucket)
+	bkt, err := zo.bktMgr.Get(bucket)
 	if err != nil {
 		return
 	}
@@ -199,12 +199,7 @@ func (zo *zerostorObjects) ListBuckets(ctx context.Context) ([]minio.BucketInfo,
 func (zo *zerostorObjects) MakeBucketWithLocation(ctx context.Context, bucket string, location string) error {
 	log.Printf("MakeBucketWithLocation bucket=%v, location=%v\n", bucket, location)
 
-	_, err := zo.getBucket(bucket)
-	if err == nil {
-		return zstorToObjectErr(errors.Trace(errBucketExists), bucket)
-	}
-
-	err = zo.bktMgr.Create(bucket)
+	err := zo.bktMgr.Create(bucket)
 	return zstorToObjectErr(errors.Trace(err), bucket)
 }
 
@@ -212,7 +207,7 @@ func (zo *zerostorObjects) MakeBucketWithLocation(ctx context.Context, bucket st
 func (zo *zerostorObjects) GetBucketPolicy(ctx context.Context, bucket string) (policy.BucketAccessPolicy, error) {
 	var pol policy.BucketAccessPolicy
 
-	bkt, err := zo.getBucket(bucket)
+	bkt, err := zo.bktMgr.Get(bucket)
 	if err != nil {
 		return pol, zstorToObjectErr(errors.Trace(err), bucket)
 	}
@@ -263,12 +258,6 @@ func (zo *zerostorObjects) CopyObject(ctx context.Context, srcBucket, srcObject,
 	srcMd, err := zo.zstor.getMeta(srcBucket, srcObject)
 	if err != nil {
 		err = zstorToObjectErr(errors.Trace(err), srcBucket, srcObject)
-		return
-	}
-
-	// check dest bucket
-	_, err = zo.getBucket(destBucket)
-	if err != nil {
 		return
 	}
 
@@ -386,6 +375,25 @@ func (zo *zerostorObjects) putObjectPart(ctx context.Context, bucket, object, up
 	return
 }
 
+// CopyObjectPart implements ObjectLayer.CopyObjectPart
+func (zo *zerostorObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, uploadID string, partID int, startOffset int64, length int64, srcInfo minio.ObjectInfo) (minio.PartInfo, error) {
+
+	// get metadata of source object
+	storRd, storWr := io.Pipe()
+	defer storRd.Close()
+
+	go func() {
+		defer storWr.Close()
+		if startOffset == 0 && length <= 0 {
+			zo.zstor.Read(srcBucket, srcObject, storWr)
+		} else {
+			zo.zstor.ReadRange(srcBucket, srcObject, storWr, startOffset, length)
+		}
+	}()
+
+	return zo.putObjectPart(ctx, destBucket, destObject, uploadID, minio.GenETag(), partID, storRd)
+}
+
 // CompleteMultipartUpload implements minio.ObjectLayer.CompleteMultipartUpload
 func (zo *zerostorObjects) CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string,
 	parts []minio.CompletePart) (info minio.ObjectInfo, err error) {
@@ -439,10 +447,6 @@ func (zo *zerostorObjects) StorageInfo(ctx context.Context) (info minio.StorageI
 		log.Printf("StorageInfo failed: %v", err)
 	}
 	return
-}
-
-func (zo *zerostorObjects) getBucket(name string) (*meta.Bucket, error) {
-	return zo.bktMgr.Get(name)
 }
 
 func debugf(format string, args ...interface{}) {

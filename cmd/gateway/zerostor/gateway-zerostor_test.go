@@ -552,6 +552,80 @@ func TestMultipartUploadListAbort(t *testing.T) {
 	}
 
 }
+
+// TestMultipartUploadComplete test multipart upload
+// using CopyObjectPart API
+func TestMultipartUploadCopyComplete(t *testing.T) {
+	const (
+		namespace = "ns"
+		bucket    = "bucket"
+		object    = "object"
+		dataLen   = 1000
+		numPart   = 100
+	)
+
+	zo, cleanup, err := newZstorGateway(namespace, bucket)
+	if err != nil {
+		t.Fatalf("failed to create gateway:%v", err)
+	}
+	defer cleanup()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// init the data we want to upload
+	var (
+		data        = make([]byte, dataLen)
+		partLen     = dataLen / numPart
+		objectsInfo []minio.ObjectInfo
+	)
+	rand.Read(data)
+
+	// upload the parts using PutObject
+	for i := 0; i < numPart; i++ {
+		rd := bytes.NewReader(data[i*partLen : (i*partLen)+partLen])
+		objectPart := fmt.Sprintf("object_%v", i)
+		info, err := zo.(*zerostorObjects).putObject(bucket, objectPart, rd, nil)
+		if err != nil {
+			t.Fatalf("failed to PutObjectPart %v, err: %v", i, err)
+		}
+		objectsInfo = append(objectsInfo, info)
+	}
+
+	// Create Upload
+	uploadID, err := zo.NewMultipartUpload(ctx, bucket, object, nil)
+	if err != nil {
+		t.Fatalf("NewMultipartUpload failed: %v", err)
+	}
+
+	// CopyPart
+	var uploadedParts []minio.PartInfo
+	for i, info := range objectsInfo {
+		part, err := zo.CopyObjectPart(ctx, bucket, info.Name, bucket, object, uploadID, i, 0, 0, info)
+		if err != nil {
+			t.Fatalf("CopyObjectPart failed: %v", err)
+		}
+		uploadedParts = append(uploadedParts, part)
+	}
+
+	// Complete the upload
+	var completeParts []minio.CompletePart
+	for _, part := range uploadedParts {
+		completeParts = append(completeParts, minio.CompletePart{
+			PartNumber: part.PartNumber,
+			ETag:       part.ETag,
+		})
+	}
+	_, err = zo.CompleteMultipartUpload(ctx, bucket, object, uploadID, completeParts)
+	if err != nil {
+		t.Fatalf("failed to CompleteMultipartUpload:%v", err)
+	}
+
+	// check the uploaded object
+	checkObject(ctx, t, zo, bucket, object, data)
+
+}
+
 func checkObject(ctx context.Context, t *testing.T, gateway minio.ObjectLayer, bucket, object string, expected []byte) {
 	buf := bytes.NewBuffer(nil)
 

@@ -25,7 +25,10 @@
 | -----------             | -   | --  | -   | ----------------------------------                                                                                  |
 | NewMultipartUpload      | v   | v   | v   |
 | PutObjectPart           | v   | v   | v   |
+| CopyObjectPart          | v   |     | v   |
 | CompleteMultipart       | v   | v   | v   |
 | AbortMultipart          | v   | v   | v   |
 | ListObjectParts         | v   |     | v   |
 | ListMultipartUpload     | v   |     | v   | only respect `bucket` argument, because of lack of docs & example in production ready gateway.                      |
+| ----------              | --- | -   | --  | ----------------------------------------                                                                            |
+| StorageInfo             | v   | v   |     | If there is no total size, set to 1TB                                                                               |
