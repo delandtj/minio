@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	minio "github.com/minio/minio/cmd"
 	"github.com/zero-os/0-stor/client/metastor/db"
@@ -31,6 +32,7 @@ const (
 type filemeta struct {
 	rootDir    string // meta root dir
 	objDir     string // dir of objects meta
+	lock       sync.RWMutex
 	encodeFunc encoding.MarshalMetadata
 	decodeFunc encoding.UnmarshalMetadata
 }
@@ -54,6 +56,15 @@ func NewDefaultMetastor(rootDir string, marshalFuncPair *encoding.MarshalFuncPai
 
 // Set implements Set interface
 func (fm *filemeta) Set(namespace, key, metadata []byte) error {
+	fm.lock.Lock()
+
+	err := fm.set(namespace, key, metadata)
+
+	fm.lock.Unlock()
+
+	return err
+}
+func (fm *filemeta) set(namespace, key, metadata []byte) error {
 	return createWriteFile(fm.filename(key), metadata, filePerm)
 }
 
@@ -62,6 +73,13 @@ func (fm *filemeta) Set(namespace, key, metadata []byte) error {
 // - file : returns content of file
 // - directory: creates meta based on the dir info
 func (fm *filemeta) Get(namespace, key []byte) (metadata []byte, err error) {
+	fm.lock.RLock()
+	md, err := fm.get(namespace, key)
+	fm.lock.RUnlock()
+	return md, err
+}
+
+func (fm *filemeta) get(namespace, key []byte) (metadata []byte, err error) {
 	fileDirName := fm.filename(key) // it could be dir or file
 
 	fi, err := os.Stat(fileDirName)
@@ -88,6 +106,9 @@ func (fm *filemeta) Get(namespace, key []byte) (metadata []byte, err error) {
 }
 
 func (fm *filemeta) Delete(namespace, key []byte) error {
+	fm.lock.Lock()
+	defer fm.lock.Unlock()
+
 	err := os.Remove(fm.filename(key))
 	if err != nil && os.IsNotExist(err) {
 		err = db.ErrNotFound
@@ -97,7 +118,10 @@ func (fm *filemeta) Delete(namespace, key []byte) error {
 
 // TODO : provide a kind of protection
 func (fm *filemeta) Update(namespace, key []byte, cb db.UpdateCallback) error {
-	mdIn, err := fm.Get(namespace, key)
+	fm.lock.Lock()
+	defer fm.lock.Unlock()
+
+	mdIn, err := fm.get(namespace, key)
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
@@ -107,12 +131,15 @@ func (fm *filemeta) Update(namespace, key []byte, cb db.UpdateCallback) error {
 		return err
 	}
 
-	return fm.Set(namespace, key, mdOut)
+	return fm.set(namespace, key, mdOut)
 }
 
 // get the metadata and decode it
 func (fm *filemeta) GetDecodeMeta(key []byte) (*metatypes.Metadata, error) {
-	rawMd, err := fm.Get([]byte(""), key)
+	fm.lock.RLock()
+	defer fm.lock.RUnlock()
+
+	rawMd, err := fm.get([]byte(""), key)
 	if err != nil {
 		return nil, err
 	}
@@ -134,6 +161,9 @@ func (fm *filemeta) ListKeys(namespace []byte, cb db.ListCallback) error {
 // handle minio.ObjectLayer.ListObjects
 func (fm *filemeta) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result minio.ListObjectsInfo, err error) {
 	dir := filepath.Join(fm.objDir, bucket, prefix)
+
+	fm.lock.RLock()
+	defer fm.lock.RUnlock()
 
 	// check, it is a file or dir
 	fi, err := os.Stat(dir)
