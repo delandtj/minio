@@ -42,17 +42,20 @@ func newFilemetaUploadMgr(metaDir string) (*filemetaUploadMgr, error) {
 }
 
 // Init implements MetaManager.Init
-func (fu *filemetaUploadMgr) Init(bucket, object string) (info minio.MultipartInfo, err error) {
+func (fu *filemetaUploadMgr) Init(bucket, object string, metadata map[string]string) (info MultipartInfo, err error) {
 	// create upload ID
 	uploadID, err := fu.createUploadID(bucket)
 	if err != nil {
 		return
 	}
 
-	info = minio.MultipartInfo{
-		UploadID:  uploadID,
-		Object:    object,
-		Initiated: time.Now(),
+	info = MultipartInfo{
+		MultipartInfo: minio.MultipartInfo{
+			UploadID:  uploadID,
+			Object:    object,
+			Initiated: time.Now(),
+		},
+		Metadata: metadata,
 	}
 
 	// creates the dir
@@ -93,14 +96,14 @@ func (fu *filemetaUploadMgr) DelPart(bucket, uploadID, etag string, partID int) 
 }
 
 // ListUpload implements MetaManager.ListUpload
-func (fu *filemetaUploadMgr) ListUpload(bucket string) ([]minio.MultipartInfo, error) {
+func (fu *filemetaUploadMgr) ListUpload(bucket string) ([]MultipartInfo, error) {
 	// get upload list
 	fileInfos, err := ioutil.ReadDir(filepath.Join(fu.rootDir, bucket))
 	if err != nil {
 		return nil, err
 	}
 
-	uploads := make([]minio.MultipartInfo, 0, len(fileInfos))
+	uploads := make([]MultipartInfo, 0, len(fileInfos))
 
 	// get metadata of each upload
 	for _, fi := range fileInfos {
@@ -122,19 +125,25 @@ func (fu *filemetaUploadMgr) ListUpload(bucket string) ([]minio.MultipartInfo, e
 	return uploads, nil
 }
 
-// ListPart implements MetaManager.ListPart
-func (fu *filemetaUploadMgr) ListPart(bucket, uploadID string) ([]PartInfo, error) {
+// GetMultipart implements MetaManager.ListPart
+func (fu *filemetaUploadMgr) GetMultipart(bucket, uploadID string) (MultipartInfo, []PartInfo, error) {
 	var (
 		uploadDir = fu.uploadDir(bucket, uploadID)
 		infos     []PartInfo
 	)
+
+	mi, err := fu.loadUpload(bucket, uploadID)
+	if err != nil {
+		return mi, nil, err
+	}
+
 	// read from the uploadID dir
 	fis, err := ioutil.ReadDir(uploadDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			err = minio.InvalidUploadID{}
 		}
-		return nil, err
+		return mi, nil, err
 	}
 
 	// read-decode each file
@@ -148,7 +157,7 @@ func (fu *filemetaUploadMgr) ListPart(bucket, uploadID string) ([]PartInfo, erro
 
 		info, err := fu.decodePart(filepath.Join(uploadDir, fi.Name()))
 		if err != nil {
-			return nil, err
+			return mi, nil, err
 		}
 		infos = append(infos, info)
 	}
@@ -160,7 +169,8 @@ func (fu *filemetaUploadMgr) ListPart(bucket, uploadID string) ([]PartInfo, erro
 		return infos[i].LastModified.Before(infos[j].LastModified)
 
 	})
-	return infos, err
+
+	return mi, infos, err
 }
 
 // Clean implements MetaManager.Clean
@@ -220,11 +230,14 @@ func (fu *filemetaUploadMgr) partFile(bucket, uploadID, etag string, partID int)
 	return filepath.Join(fu.uploadDir(bucket, uploadID), fmt.Sprintf("%s_%d", etag, partID))
 }
 
-func (fu *filemetaUploadMgr) loadUpload(bucket, uploadID string) (up minio.MultipartInfo, err error) {
+func (fu *filemetaUploadMgr) loadUpload(bucket, uploadID string) (up MultipartInfo, err error) {
 	// open upload's meta file
 	filename := filepath.Join(fu.uploadDir(bucket, uploadID), uploadMetaFile)
 	f, err := os.Open(filename)
 	if err != nil {
+		if os.IsNotExist(err) {
+			err = minio.InvalidUploadID{}
+		}
 		return
 	}
 	defer f.Close()

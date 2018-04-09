@@ -272,7 +272,7 @@ func (zo *zerostorObjects) CopyObject(ctx context.Context, srcBucket, srcObject,
 		zo.zstor.storCli.ReadWithMeta(*srcMd, pw)
 	}()
 
-	dstMd, err := zo.zstor.Write(destBucket, destObject, pr)
+	dstMd, err := zo.zstor.Write(destBucket, destObject, pr, srcInfo.UserDefined)
 	if err != nil {
 		err = zstorToObjectErr(errors.Trace(err), destBucket, destObject)
 		return
@@ -329,12 +329,20 @@ func (zo *zerostorObjects) ListObjects(ctx context.Context, bucket, prefix, mark
 // PutObject implements ObjectLayer.PutObject
 func (zo *zerostorObjects) PutObject(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
 	debugf("PutObject bucket:%v, object:%v, metadata:%v\n", bucket, object, metadata)
-	return zo.putObject(bucket, object, data, metadata)
+	return zo.putObject(bucket, object, data, metadata, data.MD5HexString())
 }
 
-func (zo *zerostorObjects) putObject(bucket, object string, rd io.Reader, metadata map[string]string) (objInfo minio.ObjectInfo, err error) {
+func (zo *zerostorObjects) putObject(bucket, object string, rd io.Reader, metadata map[string]string, etag string) (objInfo minio.ObjectInfo, err error) {
+	if etag == "" {
+		etag = minio.GenETag()
+	}
+	if metadata == nil {
+		metadata = make(map[string]string)
+	}
+	metadata[meta.ETagKey] = etag
+
 	// write to 0-stor
-	md, err := zo.zstor.Write(bucket, object, rd)
+	md, err := zo.zstor.Write(bucket, object, rd, metadata)
 	if err != nil {
 		log.Printf("PutObject bucket:%v, object:%v, failed: %v\n", bucket, object, err)
 		err = zstorToObjectErr(errors.Trace(err), bucket, object)
@@ -347,7 +355,7 @@ func (zo *zerostorObjects) putObject(bucket, object string, rd io.Reader, metada
 
 // NewMultipartUpload implements minio.ObjectLayer.NewMultipartUpload
 func (zo *zerostorObjects) NewMultipartUpload(ctx context.Context, bucket, object string, metadata map[string]string) (uploadID string, err error) {
-	uploadID, err = zo.multipartMgr.Init(bucket, object)
+	uploadID, err = zo.multipartMgr.Init(bucket, object, metadata)
 
 	debugf("NewMultipartUpload bucket:%v, object:%v, uploadID:%v\n", bucket, object, uploadID)
 
@@ -359,14 +367,14 @@ func (zo *zerostorObjects) NewMultipartUpload(ctx context.Context, bucket, objec
 
 // PutObjectPart implements minio.ObjectLayer.PutObjectPart
 func (zo *zerostorObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader) (info minio.PartInfo, err error) {
-	etag := data.MD5HexString()
-	if etag == "" {
-		etag = minio.GenETag()
-	}
-	return zo.putObjectPart(ctx, bucket, object, uploadID, etag, partID, data)
+	return zo.putObjectPart(ctx, bucket, object, uploadID, data.MD5HexString(), partID, data)
 }
 
 func (zo *zerostorObjects) putObjectPart(ctx context.Context, bucket, object, uploadID, etag string, partID int, rd io.Reader) (info minio.PartInfo, err error) {
+	if etag == "" {
+		etag = minio.GenETag()
+	}
+
 	info, err = zo.multipartMgr.UploadPart(bucket, object, uploadID, etag, partID, rd)
 	if err != nil {
 		log.Printf("PutObjectPart id:%v, partID:%v, err: %v\n", uploadID, partID, err)

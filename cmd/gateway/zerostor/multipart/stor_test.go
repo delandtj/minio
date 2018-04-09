@@ -24,7 +24,7 @@ func newStorTest() *storTest {
 	}
 }
 
-func (st *storTest) Write(bucket, object string, rd io.Reader) (*metatypes.Metadata, error) {
+func (st *storTest) Write(bucket, object string, rd io.Reader, metadata map[string]string) (*metatypes.Metadata, error) {
 
 	data, err := ioutil.ReadAll(rd)
 	if err != nil {

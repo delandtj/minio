@@ -107,16 +107,51 @@ func TestGatewayObjectRoundTrip(t *testing.T) {
 	defer cancel()
 
 	// initialize data fixture
-	data := make([]byte, dataLen)
+	var (
+		etag            = minio.GenETag()
+		contentType     = "application/json"
+		contentEncoding = "gzip"
+		data            = make([]byte, dataLen)
+		val1            = "val1"
+		key1            = "Key1"
+	)
+	userMeta := map[string]string{
+		"Content-Type":     contentType,
+		"Content-Encoding": contentEncoding,
+		key1:               val1,
+	}
 	rand.Read(data)
 
 	// upload object
-	_, err = zo.(*zerostorObjects).putObject(bucket, object, bytes.NewReader(data), nil)
+	_, err = zo.(*zerostorObjects).putObject(bucket, object, bytes.NewReader(data), userMeta, etag)
 	if err != nil {
 		t.Fatalf("failed to put object = %v", err)
 	}
 
-	// get & check object
+	// check object info
+	info, err := zo.GetObjectInfo(ctx, bucket, object)
+	if err != nil {
+		t.Fatalf("failed to get object info: %v", err)
+	}
+	if info.ETag != etag {
+		t.Fatalf("invalid etag value: %v, expected: %v", info.ETag, etag)
+	}
+	if info.ContentType != contentType {
+		t.Fatalf("invalid content type: %v, expected: %v", info.ContentType, contentType)
+	}
+	if info.ContentEncoding != contentEncoding {
+		t.Fatalf("invalid content encoding: %v, expected: %v", info.ContentEncoding, contentEncoding)
+	}
+	if len(info.UserDefined) != len(userMeta)-1 {
+		// we decrement by `1` here because we internally added etag to the user meta
+		t.Fatalf("invalid number of user defined metadata: %v, expected: %v", len(info.UserDefined), len(userMeta)-1)
+	}
+
+	if info.UserDefined[key1] != val1 {
+		t.Fatalf("invalid meta value of %v: %v, expected: %v", key1, info.UserDefined[key1], val1)
+	}
+
+	// get & check object data
 	checkObject(ctx, t, zo, bucket, object, data)
 
 	// copy object - get & check
@@ -180,7 +215,7 @@ func TestGatewayListObject(t *testing.T) {
 	// upload objects
 	for i := 0; i < numObject; i++ {
 		object := fmt.Sprintf("object_%v", i)
-		_, err = zo.(*zerostorObjects).putObject(bucket, object, bytes.NewReader(data), nil)
+		_, err = zo.(*zerostorObjects).putObject(bucket, object, bytes.NewReader(data), nil, "")
 		if err != nil {
 			t.Fatalf("failed to put object = %v", err)
 		}
@@ -396,9 +431,8 @@ func TestMultipartUploadComplete(t *testing.T) {
 	// Upload each part
 	var uploadParts []minio.PartInfo
 	for i := 0; i < numPart; i++ {
-		etag := minio.GenETag()
 		rd := bytes.NewReader(data[i*partLen : (i*partLen)+partLen])
-		part, err := zo.(*zerostorObjects).putObjectPart(ctx, bucket, object, uploadID, etag, i, rd)
+		part, err := zo.(*zerostorObjects).putObjectPart(ctx, bucket, object, uploadID, "", i, rd)
 		if err != nil {
 			t.Fatalf("failed to PutObjectPart %v, err: %v", i, err)
 		}
@@ -479,9 +513,8 @@ func TestMultipartUploadListAbort(t *testing.T) {
 		// Upload each part
 		var parts []minio.PartInfo
 		for i := 0; i < numPart; i++ {
-			etag := minio.GenETag()
 			rd := bytes.NewReader(data[i*partLen : (i*partLen)+partLen])
-			part, err := zo.(*zerostorObjects).putObjectPart(ctx, bucket, object, uploadID, etag, i, rd)
+			part, err := zo.(*zerostorObjects).putObjectPart(ctx, bucket, object, uploadID, "", i, rd)
 			if err != nil {
 				t.Fatalf("failed to PutObjectPart %v, err: %v", i, err)
 			}
@@ -585,7 +618,7 @@ func TestMultipartUploadCopyComplete(t *testing.T) {
 	for i := 0; i < numPart; i++ {
 		rd := bytes.NewReader(data[i*partLen : (i*partLen)+partLen])
 		objectPart := fmt.Sprintf("object_%v", i)
-		info, err := zo.(*zerostorObjects).putObject(bucket, objectPart, rd, nil)
+		info, err := zo.(*zerostorObjects).putObject(bucket, objectPart, rd, nil, "")
 		if err != nil {
 			t.Fatalf("failed to PutObjectPart %v, err: %v", i, err)
 		}

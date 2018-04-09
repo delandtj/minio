@@ -36,7 +36,7 @@ func TestZerostorRoundTrip(t *testing.T) {
 	buf.Reset()
 
 	// set
-	_, err = zstor.Write(bucket, object, bytes.NewReader(data))
+	_, err = zstor.Write(bucket, object, bytes.NewReader(data), nil)
 	if err != nil {
 		t.Fatalf("write error: %v", err)
 	}

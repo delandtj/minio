@@ -16,13 +16,19 @@ func TestMetaRoundTrip(t *testing.T) {
 		bucket  = "bucket"
 		object  = "object"
 		numPart = 10
+		key1    = "Key1"
+		val1    = "val1"
 	)
+
+	metadata := map[string]string{
+		key1: val1,
+	}
 
 	mm, cleanup := newTestFilemetaUploadMgr(t)
 	defer cleanup()
 
 	// init
-	uploadInfo, err := mm.Init(bucket, object)
+	uploadInfo, err := mm.Init(bucket, object, metadata)
 	if err != nil {
 		t.Fatalf("mulipart upload failed: %v", err)
 	}
@@ -47,11 +53,15 @@ func TestMetaRoundTrip(t *testing.T) {
 		infos = append(infos, partInfo)
 	}
 
-	// list part
-	parts, err := mm.ListPart(bucket, uploadID)
+	// get multipart
+	multipartInfo, parts, err := mm.GetMultipart(bucket, uploadID)
 	if err != nil {
 		t.Fatalf("failed to ListPart: %v", err)
 	}
+	if multipartInfo.Metadata[key1] != val1 {
+		t.Fatalf("invalid metadata value of %v: %v, expected: %v", key1, multipartInfo.Metadata[key1], val1)
+	}
+
 	if len(parts) != len(infos) {
 		t.Fatalf("len of listed Part (%v)  != len of PartInfo (%v)", len(parts), len(infos))
 	}
@@ -72,7 +82,7 @@ func TestMetaRoundTrip(t *testing.T) {
 	}
 
 	// check the listed uploads
-	err = checkUploads([]minio.MultipartInfo{uploadInfo}, uploads)
+	err = checkUploads([]MultipartInfo{uploadInfo}, uploads)
 	if err != nil {
 		t.Fatalf("invalid listed uploads: %v", err)
 	}
@@ -83,8 +93,8 @@ func TestMetaRoundTrip(t *testing.T) {
 		t.Fatalf("cleaning failed: %v", err)
 	}
 
-	// check again with list
-	parts, err = mm.ListPart(bucket, uploadID)
+	// check again with GetMultipart
+	_, _, err = mm.GetMultipart(bucket, uploadID)
 	expectedErr := minio.InvalidUploadID{}
 	if err != expectedErr {
 		t.Fatalf("Invalid err: %v, expected: %v", err, expectedErr)
@@ -103,10 +113,10 @@ func TestListUploads(t *testing.T) {
 	defer cleanup()
 
 	// do upload
-	var uploads []minio.MultipartInfo
+	var uploads []MultipartInfo
 	for i := 0; i < numUploads; i++ {
 		// init
-		upload, err := mm.Init(bucket, object)
+		upload, err := mm.Init(bucket, object, nil)
 		if err != nil {
 			t.Fatalf("mulipart upload failed: %v", err)
 		}
@@ -150,7 +160,7 @@ func TestListUploads(t *testing.T) {
 	}
 }
 
-func checkUploads(want, have []minio.MultipartInfo) error {
+func checkUploads(want, have []MultipartInfo) error {
 	if len(want) != len(have) {
 		return fmt.Errorf("invalid length: %v, want: %v", len(have), len(want))
 	}

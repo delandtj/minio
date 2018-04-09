@@ -17,6 +17,8 @@ func TestManagerComplete(t *testing.T) {
 		object   = "object"
 		dataLen  = 1000
 		partSize = 100
+		key1     = "Key1"
+		val1     = "val1"
 	)
 	stor := newStorTest()
 
@@ -24,7 +26,10 @@ func TestManagerComplete(t *testing.T) {
 	defer cleanup()
 
 	// Init multipart upload
-	uploadID, err := mgr.Init(bucket, object)
+	metadata := map[string]string{
+		key1: val1,
+	}
+	uploadID, err := mgr.Init(bucket, object, metadata)
 	if err != nil {
 		t.Fatalf("mulipart upload failed: %v", err)
 	}
@@ -63,7 +68,7 @@ func TestManagerComplete(t *testing.T) {
 	}
 
 	// all parts that should be deleted
-	deletedParts, err := metaMgr.ListPart(bucket, uploadID)
+	_, deletedParts, err := metaMgr.GetMultipart(bucket, uploadID)
 	if err != nil {
 		t.Fatalf("failed to list part :%v", err)
 	}
@@ -105,7 +110,7 @@ func TestManagerAbort(t *testing.T) {
 	defer cleanup()
 
 	// init
-	uploadID, err := mgr.Init(bucket, object)
+	uploadID, err := mgr.Init(bucket, object, nil)
 	if err != nil {
 		t.Fatalf("mulipart upload failed: %v", err)
 	}
@@ -124,7 +129,7 @@ func TestManagerAbort(t *testing.T) {
 	}
 
 	// get parts info
-	parts, err := metaMgr.ListPart(bucket, uploadID)
+	_, parts, err := metaMgr.GetMultipart(bucket, uploadID)
 	if err != nil {
 		t.Fatalf("failed to list part :%v", err)
 	}
@@ -168,7 +173,7 @@ func TestManagerListPart(t *testing.T) {
 	defer cleanup()
 
 	// init
-	uploadID, err := mgr.Init(bucket, object)
+	uploadID, err := mgr.Init(bucket, object, nil)
 	if err != nil {
 		t.Fatalf("mulipart upload failed: %v", err)
 	}
@@ -249,7 +254,7 @@ func TestManagerListUpload(t *testing.T) {
 
 	for i := 0; i < numUpload; i++ {
 		// init
-		uploadID, err := mgr.Init(bucket, object)
+		uploadID, err := mgr.Init(bucket, object, nil)
 		if err != nil {
 			t.Fatalf("mulipart upload failed: %v", err)
 		}

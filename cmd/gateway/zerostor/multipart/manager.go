@@ -29,8 +29,8 @@ func newManager(stor Storage, metaMgr MetaManager) *manager {
 }
 
 // Init implements Manager.Init
-func (m *manager) Init(bucket, object string) (string, error) {
-	info, err := m.metaMgr.Init(bucket, object)
+func (m *manager) Init(bucket, object string, metadata map[string]string) (string, error) {
+	info, err := m.metaMgr.Init(bucket, object, metadata)
 	if err != nil {
 		return "", err
 	}
@@ -46,7 +46,7 @@ func (m *manager) UploadPart(bucket, object, uploadID, etag string, partID int, 
 	partObject := m.objectName(uploadID, partID)
 
 	// stor the part to 0-stor server as temporary object
-	md, err := m.stor.Write(MultipartBucket, partObject, rd)
+	md, err := m.stor.Write(MultipartBucket, partObject, rd, nil)
 	if err != nil {
 		return
 	}
@@ -71,7 +71,7 @@ func (m *manager) UploadPart(bucket, object, uploadID, etag string, partID int, 
 // Complete implements Manager.Complete
 func (m *manager) Complete(bucket, object, uploadID string, parts []minio.CompletePart) (*metatypes.Metadata, error) {
 	// get all  part info of this upload ID
-	storedInfos, err := m.getStoredInfo(bucket, uploadID)
+	multipartInfo, storedPartInfos, err := m.getStoredInfo(bucket, uploadID)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +88,7 @@ func (m *manager) Complete(bucket, object, uploadID string, parts []minio.Comple
 		defer storWr.Close()
 
 		for _, part := range parts {
-			info, ok := storedInfos[part.ETag]
+			info, ok := storedPartInfos[part.ETag]
 			if !ok {
 				errCh <- minio.InvalidPart{}
 				return
@@ -107,7 +107,7 @@ func (m *manager) Complete(bucket, object, uploadID string, parts []minio.Comple
 				// Other tool should do garbage storage cleanup
 				continue
 			}
-			delete(storedInfos, part.ETag)
+			delete(storedPartInfos, part.ETag)
 
 			// we don't check the error here because
 			// we want to keep delete next part.
@@ -118,7 +118,7 @@ func (m *manager) Complete(bucket, object, uploadID string, parts []minio.Comple
 	}()
 
 	// write from the pipe
-	md, err := m.stor.Write(bucket, object, storRd)
+	md, err := m.stor.Write(bucket, object, storRd, multipartInfo.Metadata)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +130,7 @@ func (m *manager) Complete(bucket, object, uploadID string, parts []minio.Comple
 	}
 
 	// delete undeleted part
-	for _, info := range storedInfos {
+	for _, info := range storedPartInfos {
 		if err = m.stor.Delete(MultipartBucket, info.Object); err == nil {
 			// we don't return error here because we don't return error
 			// on failed deletion.
@@ -149,7 +149,7 @@ func (m *manager) Complete(bucket, object, uploadID string, parts []minio.Comple
 
 // Abort implements Manager.Abort
 func (m *manager) Abort(bucket, object, uploadID string) error {
-	parts, err := m.metaMgr.ListPart(bucket, uploadID)
+	_, parts, err := m.metaMgr.GetMultipart(bucket, uploadID)
 	if err != nil {
 		return err
 	}
@@ -170,9 +170,14 @@ func (m *manager) Abort(bucket, object, uploadID string) error {
 
 // ListUpload implements Manager.ListUpload
 func (m *manager) ListUpload(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result minio.ListMultipartsInfo, err error) {
-	uploads, err := m.metaMgr.ListUpload(bucket)
+	metaUploads, err := m.metaMgr.ListUpload(bucket)
 	if err != nil {
 		return
+	}
+
+	uploads := make([]minio.MultipartInfo, 0, len(metaUploads))
+	for _, up := range metaUploads {
+		uploads = append(uploads, up.MultipartInfo)
 	}
 	result = minio.ListMultipartsInfo{
 		KeyMarker:      keyMarker,
@@ -185,7 +190,7 @@ func (m *manager) ListUpload(bucket, prefix, keyMarker, uploadIDMarker, delimite
 
 // ListParts implements Manager.ListParts
 func (m *manager) ListParts(bucket, object, uploadID string, partMarker, maxParts int) (minio.ListPartsInfo, error) {
-	parts, err := m.metaMgr.ListPart(bucket, uploadID)
+	_, parts, err := m.metaMgr.GetMultipart(bucket, uploadID)
 	if err != nil {
 		return minio.ListPartsInfo{}, err
 	}
@@ -210,16 +215,16 @@ func (m *manager) Close() error {
 	return nil
 }
 
-func (m *manager) getStoredInfo(bucket, uploadID string) (map[string]PartInfo, error) {
-	infoArr, err := m.metaMgr.ListPart(bucket, uploadID)
+func (m *manager) getStoredInfo(bucket, uploadID string) (MultipartInfo, map[string]PartInfo, error) {
+	mi, infoArr, err := m.metaMgr.GetMultipart(bucket, uploadID)
 	if err != nil {
-		return nil, err
+		return mi, nil, err
 	}
 	infos := make(map[string]PartInfo, len(infoArr))
 	for _, info := range infoArr {
 		infos[info.ETag] = info
 	}
-	return infos, nil
+	return mi, infos, nil
 }
 
 func (m *manager) objectName(uploadID string, partID int) string {

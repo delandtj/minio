@@ -19,7 +19,7 @@ var (
 // all the things related to multipart upload
 type Manager interface {
 	// Initialize multipart upload
-	Init(bucket, object string) (string, error)
+	Init(bucket, object string, metadata map[string]string) (string, error)
 
 	// UploadPart handles a single part upload
 	UploadPart(bucket, object, uploadID, etag string, partID int, rd io.Reader) (minio.PartInfo, error)
@@ -50,7 +50,7 @@ type Manager interface {
 type MetaManager interface {
 	// InitUpload initializes all metadata required
 	// to do multipart upload
-	Init(bucket, object string) (info minio.MultipartInfo, err error)
+	Init(bucket, object string, metadata map[string]string) (info MultipartInfo, err error)
 
 	// AddPart add PartInfo to an upload ID
 	AddPart(bucket, uploadID string, partID int, info PartInfo) error
@@ -59,11 +59,11 @@ type MetaManager interface {
 	DelPart(bucket, uploadID string, etag string, partID int) error
 
 	// ListUpload returns all unfinished multipart upload, sorted by upload ID
-	ListUpload(bucket string) ([]minio.MultipartInfo, error)
+	ListUpload(bucket string) ([]MultipartInfo, error)
 
-	// ListPart returns all PartInfo for an uploadID
+	// GetMultipart returns MultipartInfo all PartInfo for an uploadID
 	// sorted ascended by partID
-	ListPart(bucket, uploadID string) ([]PartInfo, error)
+	GetMultipart(bucket, uploadID string) (MultipartInfo, []PartInfo, error)
 
 	// Clean cleans all metadata for an upload ID
 	Clean(bucket, uploadID string) error
@@ -72,9 +72,15 @@ type MetaManager interface {
 // Storage represents temporary storage used to store
 // parts of multipart upload
 type Storage interface {
-	Write(bucket, object string, rd io.Reader) (*metatypes.Metadata, error)
+	Write(bucket, object string, rd io.Reader, metadata map[string]string) (*metatypes.Metadata, error)
 	Read(bucket, object string, writer io.Writer) error
 	Delete(bucket, object string) error
+}
+
+// MultipartInfo represents info/metadata of a multipart upload
+type MultipartInfo struct {
+	minio.MultipartInfo
+	Metadata map[string]string
 }
 
 // PartInfo represent info/metadata of an uploaded part

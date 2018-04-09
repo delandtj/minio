@@ -35,7 +35,7 @@ func newInMemZstorClient(namespace string, metaCli *metastor.Client, fm meta.Sto
 	}
 }
 
-func (zc *inMemZstorClient) Write(key []byte, r io.Reader) (*metatypes.Metadata, error) {
+func (zc *inMemZstorClient) WriteWithUserMeta(key []byte, r io.Reader, userMeta map[string]string) (*metatypes.Metadata, error) {
 	data, err := ioutil.ReadAll(r)
 	if err != nil {
 		return nil, err
@@ -48,6 +48,7 @@ func (zc *inMemZstorClient) Write(key []byte, r io.Reader) (*metatypes.Metadata,
 		StorageSize:    int64(len(data)),
 		CreationEpoch:  epoch,
 		LastWriteEpoch: epoch,
+		UserDefined:    userMeta,
 	}
 
 	zc.mux.Lock()

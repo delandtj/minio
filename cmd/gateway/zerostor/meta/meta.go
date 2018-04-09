@@ -1,12 +1,20 @@
 package meta
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/minio/minio-go/pkg/policy"
 	minio "github.com/minio/minio/cmd"
 	"github.com/zero-os/0-stor/client/metastor/db"
 	"github.com/zero-os/0-stor/client/metastor/metatypes"
+)
+
+var (
+	contentTypeKey     = http.CanonicalHeaderKey("content-type")
+	contentEncodingKey = http.CanonicalHeaderKey("content-encoding")
+	// ETagKey defines key of `etag` value in the metadata
+	ETagKey = http.CanonicalHeaderKey("etag")
 )
 
 // Storage defines interface for 0-stor gateway metadata
@@ -51,16 +59,26 @@ type Bucket struct {
 
 // CreateObjectInfo creates minio ObjectInfo from 0-stor metadata
 func CreateObjectInfo(bucket, object string, md *metatypes.Metadata) minio.ObjectInfo {
-	return minio.ObjectInfo{
-		Bucket:  bucket,
-		Name:    object,
-		Size:    md.Size, // TODO : returns the actual size
-		ModTime: zstorEpochToTimestamp(md.LastWriteEpoch),
-		// TODO:
-		// ETag:"",
-		// ContentType:
-		// UserDefined
+	info := minio.ObjectInfo{
+		Bucket:          bucket,
+		Name:            object,
+		Size:            md.Size,
+		ModTime:         zstorEpochToTimestamp(md.LastWriteEpoch),
+		ETag:            getUserMetadataValue(ETagKey, md.UserDefined),
+		ContentType:     getUserMetadataValue(contentTypeKey, md.UserDefined),
+		ContentEncoding: getUserMetadataValue(contentEncodingKey, md.UserDefined),
 	}
+
+	delete(md.UserDefined, ETagKey) // delete etag from user defined because this field was from this gateway
+
+	info.UserDefined = md.UserDefined
+
+	return info
+}
+
+func getUserMetadataValue(key string, userMeta map[string]string) string {
+	v, _ := userMeta[key]
+	return v
 }
 
 // convert zerostor epoch time to Go timestamp

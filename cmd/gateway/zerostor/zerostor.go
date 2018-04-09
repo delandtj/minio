@@ -3,6 +3,7 @@ package zerostor
 import (
 	"fmt"
 	"io"
+	"net/http"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -72,10 +73,17 @@ func newZerostor(cfg client.Config, metaDir string) (*zerostor, error) {
 	}, nil
 }
 
-// Write writes object from the given reader
-func (zc *zerostor) Write(bucket, object string, rd io.Reader) (*metatypes.Metadata, error) {
+// Write write object from the given reader and metadata
+func (zc *zerostor) Write(bucket, object string, rd io.Reader, userDefMeta map[string]string) (*metatypes.Metadata, error) {
+	// convert the header key to canonical header key format
+	// so we can use it easily when getting the object info
+	userDef := make(map[string]string, len(userDefMeta))
+	for k, v := range userDefMeta {
+		userDef[http.CanonicalHeaderKey(k)] = v
+	}
+
 	key := zc.toZstorKey(bucket, object)
-	return zc.storCli.Write(key, rd)
+	return zc.storCli.WriteWithUserMeta(key, rd, userDef)
 }
 
 // Read reads object and write it to the given writer
