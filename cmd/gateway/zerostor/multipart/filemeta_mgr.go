@@ -42,14 +42,14 @@ func newFilemetaUploadMgr(metaDir string) (*filemetaUploadMgr, error) {
 }
 
 // Init implements MetaManager.Init
-func (fu *filemetaUploadMgr) Init(bucket, object string, metadata map[string]string) (info MultipartInfo, err error) {
+func (fu *filemetaUploadMgr) Init(bucket, object string, metadata map[string]string) (info Info, err error) {
 	// create upload ID
 	uploadID, err := fu.createUploadID(bucket)
 	if err != nil {
 		return
 	}
 
-	info = MultipartInfo{
+	info = Info{
 		MultipartInfo: minio.MultipartInfo{
 			UploadID:  uploadID,
 			Object:    object,
@@ -96,14 +96,14 @@ func (fu *filemetaUploadMgr) DelPart(bucket, uploadID, etag string, partID int) 
 }
 
 // ListUpload implements MetaManager.ListUpload
-func (fu *filemetaUploadMgr) ListUpload(bucket string) ([]MultipartInfo, error) {
+func (fu *filemetaUploadMgr) ListUpload(bucket string) ([]Info, error) {
 	// get upload list
 	fileInfos, err := ioutil.ReadDir(filepath.Join(fu.rootDir, bucket))
 	if err != nil {
 		return nil, err
 	}
 
-	uploads := make([]MultipartInfo, 0, len(fileInfos))
+	uploads := make([]Info, 0, len(fileInfos))
 
 	// get metadata of each upload
 	for _, fi := range fileInfos {
@@ -126,18 +126,15 @@ func (fu *filemetaUploadMgr) ListUpload(bucket string) ([]MultipartInfo, error) 
 }
 
 // GetMultipart implements MetaManager.ListPart
-func (fu *filemetaUploadMgr) GetMultipart(bucket, uploadID string) (MultipartInfo, []PartInfo, error) {
-	var (
-		uploadDir = fu.uploadDir(bucket, uploadID)
-		infos     []PartInfo
-	)
-
+func (fu *filemetaUploadMgr) GetMultipart(bucket, uploadID string) (Info, []PartInfo, error) {
 	mi, err := fu.loadUpload(bucket, uploadID)
 	if err != nil {
 		return mi, nil, err
 	}
 
 	// read from the uploadID dir
+	uploadDir := fu.uploadDir(bucket, uploadID)
+
 	fis, err := ioutil.ReadDir(uploadDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -145,6 +142,11 @@ func (fu *filemetaUploadMgr) GetMultipart(bucket, uploadID string) (MultipartInf
 		}
 		return mi, nil, err
 	}
+
+	var (
+		infos []PartInfo
+		info  PartInfo
+	)
 
 	// read-decode each file
 	for _, fi := range fis {
@@ -155,7 +157,7 @@ func (fu *filemetaUploadMgr) GetMultipart(bucket, uploadID string) (MultipartInf
 			continue
 		}
 
-		info, err := fu.decodePart(filepath.Join(uploadDir, fi.Name()))
+		info, err = fu.decodePart(filepath.Join(uploadDir, fi.Name()))
 		if err != nil {
 			return mi, nil, err
 		}
@@ -230,7 +232,7 @@ func (fu *filemetaUploadMgr) partFile(bucket, uploadID, etag string, partID int)
 	return filepath.Join(fu.uploadDir(bucket, uploadID), fmt.Sprintf("%s_%d", etag, partID))
 }
 
-func (fu *filemetaUploadMgr) loadUpload(bucket, uploadID string) (up MultipartInfo, err error) {
+func (fu *filemetaUploadMgr) loadUpload(bucket, uploadID string) (up Info, err error) {
 	// open upload's meta file
 	filename := filepath.Join(fu.uploadDir(bucket, uploadID), uploadMetaFile)
 	f, err := os.Open(filename)

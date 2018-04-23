@@ -158,7 +158,7 @@ func TestGatewayObjectRoundTrip(t *testing.T) {
 	{
 		destBucket := "destBucket"
 		zo.(*zerostorObjects).bktMgr.Create(destBucket)
-		_, err := zo.CopyObject(ctx, bucket, object, destBucket, object, minio.ObjectInfo{})
+		_, err = zo.CopyObject(ctx, bucket, object, destBucket, object, minio.ObjectInfo{})
 		if err != nil {
 			t.Fatalf("CopyObject failed: %v", err)
 		}
@@ -233,7 +233,7 @@ func TestGatewayListObject(t *testing.T) {
 
 }
 
-// Test Deleting non existant object.
+// Test Deleting non existent object.
 // it shouldn't return error
 func TestDeleteNotExistObject(t *testing.T) {
 	const (
@@ -260,7 +260,7 @@ func TestDeleteNotExistObject(t *testing.T) {
 	// delete object
 	err = zo.DeleteObject(ctx, bucket, object)
 	if err != nil {
-		t.Fatalf("deleting non existant object should not return error, got: %v", err)
+		t.Fatalf("deleting non existent object should not return error, got: %v", err)
 	}
 }
 
@@ -343,7 +343,8 @@ func TestGatewayBucketPolicy(t *testing.T) {
 
 	// by default, BucketPolicy==None
 	{
-		pol, err := zo.GetBucketPolicy(ctx, bucket)
+		var pol policy.BucketAccessPolicy
+		pol, err = zo.GetBucketPolicy(ctx, bucket)
 		if err != nil {
 			t.Fatalf("failed to GetBucketPolicy:%v", err)
 		}
@@ -362,7 +363,7 @@ func TestGatewayBucketPolicy(t *testing.T) {
 		}
 
 		// get bucket policy
-		pol, err := zo.GetBucketPolicy(ctx, bucket)
+		pol, err = zo.GetBucketPolicy(ctx, bucket)
 		if err != nil {
 			t.Fatalf("failed to GetBucketPolicy:%v", err)
 		}
@@ -431,8 +432,9 @@ func TestMultipartUploadComplete(t *testing.T) {
 	// Upload each part
 	var uploadParts []minio.PartInfo
 	for i := 0; i < numPart; i++ {
+		var part minio.PartInfo
 		rd := bytes.NewReader(data[i*partLen : (i*partLen)+partLen])
-		part, err := zo.(*zerostorObjects).putObjectPart(ctx, bucket, object, uploadID, "", i, rd)
+		part, err = zo.(*zerostorObjects).putObjectPart(ctx, bucket, object, uploadID, "", i, rd)
 		if err != nil {
 			t.Fatalf("failed to PutObjectPart %v, err: %v", i, err)
 		}
@@ -497,13 +499,15 @@ func TestMultipartUploadListAbort(t *testing.T) {
 	// do upload
 	for i := 0; i < numUploads; i++ {
 		var (
-			data   = make([]byte, dataLen)
-			object = fmt.Sprintf("object_%v", i)
+			data     = make([]byte, dataLen)
+			object   = fmt.Sprintf("object_%v", i)
+			uploadID string
+			part     minio.PartInfo
 		)
 		rand.Read(data)
 
 		// Create Upload
-		uploadID, err := zo.NewMultipartUpload(ctx, bucket, object, nil)
+		uploadID, err = zo.NewMultipartUpload(ctx, bucket, object, nil)
 		if err != nil {
 			t.Fatalf("NewMultipartUpload failed: %v", err)
 		}
@@ -514,7 +518,7 @@ func TestMultipartUploadListAbort(t *testing.T) {
 		var parts []minio.PartInfo
 		for i := 0; i < numPart; i++ {
 			rd := bytes.NewReader(data[i*partLen : (i*partLen)+partLen])
-			part, err := zo.(*zerostorObjects).putObjectPart(ctx, bucket, object, uploadID, "", i, rd)
+			part, err = zo.(*zerostorObjects).putObjectPart(ctx, bucket, object, uploadID, "", i, rd)
 			if err != nil {
 				t.Fatalf("failed to PutObjectPart %v, err: %v", i, err)
 			}
@@ -541,7 +545,8 @@ func TestMultipartUploadListAbort(t *testing.T) {
 
 	// check object parts
 	for _, upload := range uploads.Uploads {
-		listPartsResult, err := zo.ListObjectParts(ctx, bucket, upload.Object, upload.UploadID, 0, 1000)
+		var listPartsResult minio.ListPartsInfo
+		listPartsResult, err = zo.ListObjectParts(ctx, bucket, upload.Object, upload.UploadID, 0, 1000)
 		if err != nil {
 			t.Fatalf("Failed to ListObjectPart of upload ID:%v, err: %v", upload.UploadID, err)
 		}
@@ -611,6 +616,7 @@ func TestMultipartUploadCopyComplete(t *testing.T) {
 		data        = make([]byte, dataLen)
 		partLen     = dataLen / numPart
 		objectsInfo []minio.ObjectInfo
+		info        minio.ObjectInfo
 	)
 	rand.Read(data)
 
@@ -618,7 +624,7 @@ func TestMultipartUploadCopyComplete(t *testing.T) {
 	for i := 0; i < numPart; i++ {
 		rd := bytes.NewReader(data[i*partLen : (i*partLen)+partLen])
 		objectPart := fmt.Sprintf("object_%v", i)
-		info, err := zo.(*zerostorObjects).putObject(bucket, objectPart, rd, nil, "")
+		info, err = zo.(*zerostorObjects).putObject(bucket, objectPart, rd, nil, "")
 		if err != nil {
 			t.Fatalf("failed to PutObjectPart %v, err: %v", i, err)
 		}
@@ -632,9 +638,12 @@ func TestMultipartUploadCopyComplete(t *testing.T) {
 	}
 
 	// CopyPart
-	var uploadedParts []minio.PartInfo
+	var (
+		uploadedParts []minio.PartInfo
+		part          minio.PartInfo
+	)
 	for i, info := range objectsInfo {
-		part, err := zo.CopyObjectPart(ctx, bucket, info.Name, bucket, object, uploadID, i, 0, 0, info)
+		part, err = zo.CopyObjectPart(ctx, bucket, info.Name, bucket, object, uploadID, i, 0, 0, info)
 		if err != nil {
 			t.Fatalf("CopyObjectPart failed: %v", err)
 		}

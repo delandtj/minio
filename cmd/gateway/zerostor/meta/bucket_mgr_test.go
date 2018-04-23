@@ -137,7 +137,8 @@ func TestBucketPolicy(t *testing.T) {
 
 	checkBucketPolicy := func(bm BucketManager, msg string) {
 		t.Log(msg)
-		bkt, err := bm.Get(bucketName)
+		var bkt *Bucket
+		bkt, err = bm.Get(bucketName)
 		if err != nil {
 			t.Errorf("failed to get bucket `%v`: %v", bucketName, err)
 		}

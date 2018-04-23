@@ -26,11 +26,7 @@ type bucketMgr struct {
 // NewDefaultBucketMgr creates default BucketManager implementation.
 // The implementation is using file based storage
 func NewDefaultBucketMgr(metaDir string, specialBuckets ...string) (BucketManager, error) {
-	var (
-		buckets = make(map[string]*bucket)
-		dir     = filepath.Join(metaDir, bucketDir)
-	)
-
+	dir := filepath.Join(metaDir, bucketDir)
 	// initialize bucket dir, if not exist
 	if err := os.MkdirAll(dir, dirPerm); err != nil {
 		return nil, err
@@ -42,11 +38,15 @@ func NewDefaultBucketMgr(metaDir string, specialBuckets ...string) (BucketManage
 		return nil, err
 	}
 
+	var (
+		buckets = make(map[string]*bucket)
+		bkt     *bucket
+	)
 	for _, f := range files {
 		if f.IsDir() {
 			continue
 		}
-		bkt, err := newBucketFromFile(dir, f.Name())
+		bkt, err = newBucketFromFile(dir, f.Name())
 		if err != nil {
 			return nil, err
 		}
@@ -62,7 +62,7 @@ func NewDefaultBucketMgr(metaDir string, specialBuckets ...string) (BucketManage
 
 	// creates special bucket
 	for _, bucket := range specialBuckets {
-		if _, err := mgr.Get(bucket); err == nil {
+		if _, err = mgr.Get(bucket); err == nil {
 			continue
 		}
 

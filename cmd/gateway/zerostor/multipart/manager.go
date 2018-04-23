@@ -95,13 +95,13 @@ func (m *manager) Complete(bucket, object, uploadID string, parts []minio.Comple
 			}
 
 			// get data
-			if err := m.stor.Read(MultipartBucket, info.Object, storWr); err != nil {
+			if err = m.stor.Read(MultipartBucket, info.Object, storWr); err != nil {
 				errCh <- err
 				return
 			}
 
 			// delete the temporary object
-			if err := m.stor.Delete(MultipartBucket, info.Object); err != nil {
+			if err = m.stor.Delete(MultipartBucket, info.Object); err != nil {
 				// we don't return error here because we don't return error
 				// on failed deletion.
 				// Other tool should do garbage storage cleanup
@@ -157,7 +157,7 @@ func (m *manager) Abort(bucket, object, uploadID string) error {
 	for _, part := range parts {
 		if err := m.stor.Delete(MultipartBucket, part.Object); err != nil {
 			// we don't return error because we want to delete next part.
-			// another tool shoudl do storage cleanup
+			// another tool should do storage cleanup
 			continue
 		}
 		// we don't check the error here because
@@ -215,7 +215,7 @@ func (m *manager) Close() error {
 	return nil
 }
 
-func (m *manager) getStoredInfo(bucket, uploadID string) (MultipartInfo, map[string]PartInfo, error) {
+func (m *manager) getStoredInfo(bucket, uploadID string) (Info, map[string]PartInfo, error) {
 	mi, infoArr, err := m.metaMgr.GetMultipart(bucket, uploadID)
 	if err != nil {
 		return mi, nil, err

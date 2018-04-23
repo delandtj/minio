@@ -50,7 +50,7 @@ type Manager interface {
 type MetaManager interface {
 	// InitUpload initializes all metadata required
 	// to do multipart upload
-	Init(bucket, object string, metadata map[string]string) (info MultipartInfo, err error)
+	Init(bucket, object string, metadata map[string]string) (info Info, err error)
 
 	// AddPart add PartInfo to an upload ID
 	AddPart(bucket, uploadID string, partID int, info PartInfo) error
@@ -59,11 +59,11 @@ type MetaManager interface {
 	DelPart(bucket, uploadID string, etag string, partID int) error
 
 	// ListUpload returns all unfinished multipart upload, sorted by upload ID
-	ListUpload(bucket string) ([]MultipartInfo, error)
+	ListUpload(bucket string) ([]Info, error)
 
-	// GetMultipart returns MultipartInfo all PartInfo for an uploadID
+	// GetMultipart returns Info all PartInfo for an uploadID
 	// sorted ascended by partID
-	GetMultipart(bucket, uploadID string) (MultipartInfo, []PartInfo, error)
+	GetMultipart(bucket, uploadID string) (Info, []PartInfo, error)
 
 	// Clean cleans all metadata for an upload ID
 	Clean(bucket, uploadID string) error
@@ -77,8 +77,8 @@ type Storage interface {
 	Delete(bucket, object string) error
 }
 
-// MultipartInfo represents info/metadata of a multipart upload
-type MultipartInfo struct {
+// Info represents info/metadata of a multipart upload
+type Info struct {
 	minio.MultipartInfo
 	Metadata map[string]string
 }

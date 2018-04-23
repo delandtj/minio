@@ -82,7 +82,7 @@ func TestMetaRoundTrip(t *testing.T) {
 	}
 
 	// check the listed uploads
-	err = checkUploads([]MultipartInfo{uploadInfo}, uploads)
+	err = checkUploads([]Info{uploadInfo}, uploads)
 	if err != nil {
 		t.Fatalf("invalid listed uploads: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestListUploads(t *testing.T) {
 	defer cleanup()
 
 	// do upload
-	var uploads []MultipartInfo
+	var uploads []Info
 	for i := 0; i < numUploads; i++ {
 		// init
 		upload, err := mm.Init(bucket, object, nil)
@@ -160,7 +160,7 @@ func TestListUploads(t *testing.T) {
 	}
 }
 
-func checkUploads(want, have []MultipartInfo) error {
+func checkUploads(want, have []Info) error {
 	if len(want) != len(have) {
 		return fmt.Errorf("invalid length: %v, want: %v", len(have), len(want))
 	}

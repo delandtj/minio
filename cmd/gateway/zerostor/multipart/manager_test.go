@@ -47,7 +47,7 @@ func TestManagerComplete(t *testing.T) {
 		etag := minio.GenETag()
 		partNumber := i
 
-		_, err := mgr.UploadPart(bucket, object, uploadID, etag, partNumber, bytes.NewReader(dataPart))
+		_, err = mgr.UploadPart(bucket, object, uploadID, etag, partNumber, bytes.NewReader(dataPart))
 		if err != nil {
 			t.Fatalf("failed to upload part: %v, err: %v", i, err)
 		}
@@ -61,7 +61,7 @@ func TestManagerComplete(t *testing.T) {
 	for i := 0; i < dataLen/partSize; i++ {
 		dataPart := data[i*partSize : (i+1)*partSize]
 
-		_, err := mgr.UploadPart(bucket, object, uploadID, minio.GenETag(), i, bytes.NewReader(dataPart))
+		_, err = mgr.UploadPart(bucket, object, uploadID, minio.GenETag(), i, bytes.NewReader(dataPart))
 		if err != nil {
 			t.Fatalf("failed to upload part: %v, err: %v", i, err)
 		}
@@ -122,7 +122,7 @@ func TestManagerAbort(t *testing.T) {
 	for i := 0; i < dataLen/partSize; i++ {
 		dataPart := data[i*partSize : (i+1)*partSize]
 
-		_, err := mgr.UploadPart(bucket, object, uploadID, minio.GenETag(), i, bytes.NewReader(dataPart))
+		_, err = mgr.UploadPart(bucket, object, uploadID, minio.GenETag(), i, bytes.NewReader(dataPart))
 		if err != nil {
 			t.Fatalf("failed to upload part: %v, err: %v", i, err)
 		}
@@ -182,13 +182,14 @@ func TestManagerListPart(t *testing.T) {
 	var (
 		uploadedParts []minio.PartInfo
 		data          = make([]byte, dataLen)
+		part          minio.PartInfo
 	)
 	rand.Read(data)
 
 	for i := 0; i < dataLen/partSize; i++ {
 		dataPart := data[i*partSize : (i+1)*partSize]
 
-		part, err := mgr.UploadPart(bucket, object, uploadID, minio.GenETag(), i, bytes.NewReader(dataPart))
+		part, err = mgr.UploadPart(bucket, object, uploadID, minio.GenETag(), i, bytes.NewReader(dataPart))
 		if err != nil {
 			t.Fatalf("failed to upload part: %v, err: %v", i, err)
 		}
