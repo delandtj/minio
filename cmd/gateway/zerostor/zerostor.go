@@ -20,7 +20,6 @@ import (
 	"github.com/zero-os/0-stor/client/metastor/db"
 	"github.com/zero-os/0-stor/client/metastor/encoding"
 	"github.com/zero-os/0-stor/client/metastor/metatypes"
-	"github.com/zero-os/0-stor/client/processing"
 )
 
 // zerostor defines 0-stor storage
@@ -45,7 +44,7 @@ func newZerostor(cfg client.Config, metaDir string) (*zerostor, error) {
 	}
 
 	// creates meta client
-	fm, metaCli, err := createMestatorClient(cfg.MetaStor, cfg.Namespace, metaDir)
+	fm, metaCli, err := createMestatorClient(cfg.Namespace, metaDir)
 	if err != nil {
 		return nil, err
 	}
@@ -88,13 +87,21 @@ func (zc *zerostor) Write(bucket, object string, rd io.Reader, userDefMeta map[s
 
 // Read reads object and write it to the given writer
 func (zc *zerostor) Read(bucket, object string, writer io.Writer) error {
-	return zc.storCli.Read(zc.toZstorKey(bucket, object), writer)
+	md, err := zc.getMeta(bucket, object)
+	if err != nil {
+		return err
+	}
+	return zc.storCli.Read(*md, writer)
 }
 
 // ReadRange reads object and write it to the given writer with specified
 // offset and length
 func (zc *zerostor) ReadRange(bucket, object string, writer io.Writer, offset, length int64) error {
-	return zc.storCli.ReadRange(zc.toZstorKey(bucket, object), writer, offset, length)
+	md, err := zc.getMeta(bucket, object)
+	if err != nil {
+		return err
+	}
+	return zc.storCli.ReadRange(*md, writer, offset, length)
 }
 
 // getMeta get metadata of the given bucket-object
@@ -118,7 +125,7 @@ func (zc *zerostor) Delete(bucket, object string) error {
 		return err
 	}
 
-	if err := zc.storCli.DeleteWithMeta(*md); err == nil {
+	if err := zc.storCli.Delete(*md); err == nil {
 		return nil
 	}
 
@@ -212,46 +219,21 @@ func createDataClusterFromConfig(cfg *client.Config) (datastor.Cluster, error) {
 	return zerodb.NewCluster(cfg.DataStor.Shards, cfg.Password, cfg.Namespace, nil)
 }
 
-func createMestatorClient(cfg client.MetaStorConfig, namespace, metaDir string) (fm meta.Storage, mc *metastor.Client, err error) {
-	var metaCfg metastor.Config
-
+func createMestatorClient(namespace, metaDir string) (fm meta.Storage, mc *metastor.Client, err error) {
 	// create the metadata encoding func pair
-	metaCfg.MarshalFuncPair, err = encoding.NewMarshalFuncPair(cfg.Encoding)
+	marshalFuncPair, err := encoding.NewMarshalFuncPair(encoding.DefaultMarshalType)
 	if err != nil {
 		return
 	}
 
 	// create metastor database first,
 	// so that then we can create the Metastor client itself
-	// TODO: support other types of databases (e.g. badger)
-	fm, err = meta.NewDefaultMetastor(metaDir, metaCfg.MarshalFuncPair)
-	if err != nil {
-		return
-	}
-	metaCfg.Database = fm
-
-	if len(cfg.Encryption.PrivateKey) == 0 {
-		// create potentially insecure metastor storage
-		mc, err = metastor.NewClient([]byte(namespace), metaCfg)
-		return
-	}
-
-	// create the constructor which will create our encrypter-decrypter when needed
-	metaCfg.ProcessorConstructor = func() (processing.Processor, error) {
-		return processing.NewEncrypterDecrypter(
-			cfg.Encryption.Type, []byte(cfg.Encryption.PrivateKey))
-	}
-	// ensure the constructor is valid,
-	// as most errors (if not all) are static, and will only fail due to the given input,
-	// meaning that if it can be created it now, it should be fine later on as well
-	_, err = metaCfg.ProcessorConstructor()
+	fm, err = meta.NewDefaultMetastor(metaDir, marshalFuncPair)
 	if err != nil {
 		return
 	}
 
-	// create our full-metaCfgured metastor client,
-	// including encryption support for our metadata in binary form
-	mc, err = metastor.NewClient([]byte(namespace), metaCfg)
+	mc, err = metastor.NewClient(namespace, fm, "")
 	return
 }
 

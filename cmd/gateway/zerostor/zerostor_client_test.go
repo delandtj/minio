@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/gateway/zerostor/meta"
-	"github.com/zero-os/0-stor/client"
 	"github.com/zero-os/0-stor/client/datastor"
 	"github.com/zero-os/0-stor/client/datastor/pipeline/storage"
 	"github.com/zero-os/0-stor/client/metastor"
@@ -59,30 +58,18 @@ func (zc *inMemZstorClient) WriteWithUserMeta(key []byte, r io.Reader, userMeta 
 	return &md, zc.metaCli.SetMetadata(md)
 }
 
-func (zc *inMemZstorClient) ReadWithMeta(md metatypes.Metadata, w io.Writer) error {
+func (zc *inMemZstorClient) Read(md metatypes.Metadata, w io.Writer) error {
+	return zc.readRange(md, w, 0, 0)
+}
+
+func (zc *inMemZstorClient) ReadRange(md metatypes.Metadata, w io.Writer, offset, length int64) error {
+	return zc.readRange(md, w, offset, length)
+}
+func (zc *inMemZstorClient) readRange(md metatypes.Metadata, w io.Writer, offset, length int64) error {
 	zc.mux.Lock()
 	defer zc.mux.Unlock()
 
-	val, ok := zc.kv[string(md.Key)]
-	if !ok {
-		return datastor.ErrKeyNotFound
-	}
-
-	_, err := io.Copy(w, bytes.NewReader(val))
-	return err
-}
-
-func (zc *inMemZstorClient) Read(key []byte, w io.Writer) error {
-	return zc.readRange(key, w, 0, 0)
-}
-
-func (zc *inMemZstorClient) ReadRange(key []byte, w io.Writer, offset, length int64) error {
-	return zc.readRange(key, w, offset, length)
-}
-func (zc *inMemZstorClient) readRange(key []byte, w io.Writer, offset, length int64) error {
-	zc.mux.Lock()
-	defer zc.mux.Unlock()
-
+	key := md.Key
 	val, ok := zc.kv[string(key)]
 	if !ok {
 		return datastor.ErrKeyNotFound
@@ -97,7 +84,7 @@ func (zc *inMemZstorClient) readRange(key []byte, w io.Writer, offset, length in
 	return err
 }
 
-func (zc *inMemZstorClient) DeleteWithMeta(md metatypes.Metadata) error {
+func (zc *inMemZstorClient) Delete(md metatypes.Metadata) error {
 	zc.mux.Lock()
 	defer zc.mux.Unlock()
 
@@ -114,7 +101,7 @@ func (zc *inMemZstorClient) DeleteWithMeta(md metatypes.Metadata) error {
 	return nil
 }
 
-func (zc *inMemZstorClient) CheckWithMeta(md metatypes.Metadata, fast bool) (storage.CheckStatus, error) {
+func (zc *inMemZstorClient) Check(md metatypes.Metadata, fast bool) (storage.CheckStatus, error) {
 	zc.mux.Lock()
 	defer zc.mux.Unlock()
 
@@ -124,10 +111,11 @@ func (zc *inMemZstorClient) CheckWithMeta(md metatypes.Metadata, fast bool) (sto
 	return storage.CheckStatusOptimal, nil
 }
 
-func (zc *inMemZstorClient) Repair(key []byte) (*metatypes.Metadata, error) {
+func (zc *inMemZstorClient) Repair(md metatypes.Metadata) (*metatypes.Metadata, error) {
 	zc.mux.Lock()
 	defer zc.mux.Unlock()
 
+	key := md.Key
 	_, ok := zc.kv[string(key)]
 	if !ok {
 		return nil, datastor.ErrKeyNotFound
@@ -151,7 +139,7 @@ func newTestInMemZstorClient(namespace string) (*inMemZstorClient, meta.Storage,
 		return nil, nil, nil, nil, "", err
 	}
 
-	fm, metaCli, err := createMestatorClient(client.MetaStorConfig{}, namespace, metaDir)
+	fm, metaCli, err := createMestatorClient(namespace, metaDir)
 	if err != nil {
 		return nil, nil, nil, nil, "", err
 	}

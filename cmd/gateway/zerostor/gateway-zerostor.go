@@ -269,7 +269,7 @@ func (zo *zerostorObjects) CopyObject(ctx context.Context, srcBucket, srcObject,
 
 	go func() {
 		defer pw.Close()
-		zo.zstor.storCli.ReadWithMeta(*srcMd, pw)
+		zo.zstor.storCli.Read(*srcMd, pw)
 	}()
 
 	dstMd, err := zo.zstor.Write(destBucket, destObject, pr, srcInfo.UserDefined)

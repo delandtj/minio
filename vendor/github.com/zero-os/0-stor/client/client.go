@@ -30,13 +30,9 @@ import (
 	"github.com/zero-os/0-stor/client/datastor/pipeline/storage"
 	"github.com/zero-os/0-stor/client/datastor/zerodb"
 	"github.com/zero-os/0-stor/client/metastor"
-	metaDB "github.com/zero-os/0-stor/client/metastor/db"
-	"github.com/zero-os/0-stor/client/metastor/db/etcd"
-	"github.com/zero-os/0-stor/client/metastor/encoding"
 	"github.com/zero-os/0-stor/client/metastor/metatypes"
-	"github.com/zero-os/0-stor/client/processing"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -58,28 +54,11 @@ type Client struct {
 	metastorClient *metastor.Client
 }
 
-// NewClientFromConfig creates new 0-stor client using the given config,
-// with (JWT Token) caching enabled only if required.
-//
-// JWT Token caching is required only if IYO credentials have been configured
-// in the given config, which are to be used to create tokens using the IYO Web API.
+// NewClientFromConfig creates new 0-stor client using the given config.
 //
 // If JobCount is 0 or negative, the default JobCount will be used,
 // as defined by the pipeline package.
-func NewClientFromConfig(cfg Config, jobCount int) (*Client, error) {
-	return newClientFromConfig(&cfg, jobCount, true)
-}
-
-// NewClientFromConfigWithoutCaching creates new 0-stor client using the given config,
-// and with (JWT Token) caching disabled.
-//
-// If JobCount is 0 or negative, the default JobCount will be used,
-// as defined by the pipeline package.
-func NewClientFromConfigWithoutCaching(cfg Config, jobCount int) (*Client, error) {
-	return newClientFromConfig(&cfg, jobCount, false)
-}
-
-func newClientFromConfig(cfg *Config, jobCount int, enableCaching bool) (*Client, error) {
+func NewClientFromConfig(cfg Config, metastorClient *metastor.Client, jobCount int) (*Client, error) {
 	// create datastor cluster
 	datastorCluster, err := createDataClusterFromConfig(cfg)
 	if err != nil {
@@ -92,67 +71,10 @@ func newClientFromConfig(cfg *Config, jobCount int, enableCaching bool) (*Client
 		return nil, err
 	}
 
-	// create metastor client
-	metastorClient, err := createMetastorClientFromConfig(cfg.Namespace, &cfg.MetaStor)
-	if err != nil {
-		return nil, err
-	}
 	return NewClient(metastorClient, dataPipeline), nil
 }
 
-func createMetastorClientFromConfig(namespace string, cfg *MetaStorConfig) (*metastor.Client, error) {
-	if len(cfg.Database.Endpoints) == 0 {
-		return nil, errors.New("no metadata storage ETCD endpoints given")
-	}
-
-	// create metastor database first,
-	// so that then we can create the Metastor client itself
-	// TODO: support other types of databases (e.g. badger)
-	db, err := etcd.New(cfg.Database.Endpoints)
-	if err != nil {
-		return nil, err
-	}
-
-	// create the metastor client and the rest of its components
-	return createMetastorClientFromConfigAndDatabase(namespace, cfg, db)
-}
-
-func createMetastorClientFromConfigAndDatabase(namespace string, cfg *MetaStorConfig, db metaDB.DB) (*metastor.Client, error) {
-	var (
-		err    error
-		config = metastor.Config{Database: db}
-	)
-
-	// create the metadata encoding func pair
-	config.MarshalFuncPair, err = encoding.NewMarshalFuncPair(cfg.Encoding)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(cfg.Encryption.PrivateKey) == 0 {
-		// create potentially insecure metastor storage
-		return metastor.NewClient([]byte(namespace), config)
-	}
-
-	// create the constructor which will create our encrypter-decrypter when needed
-	config.ProcessorConstructor = func() (processing.Processor, error) {
-		return processing.NewEncrypterDecrypter(
-			cfg.Encryption.Type, []byte(cfg.Encryption.PrivateKey))
-	}
-	// ensure the constructor is valid,
-	// as most errors (if not all) are static, and will only fail due to the given input,
-	// meaning that if it can be created it now, it should be fine later on as well
-	_, err = config.ProcessorConstructor()
-	if err != nil {
-		return nil, err
-	}
-
-	// create our full-configured metastor client,
-	// including encryption support for our metadata in binary form
-	return metastor.NewClient([]byte(namespace), config)
-}
-
-func createDataClusterFromConfig(cfg *Config) (datastor.Cluster, error) {
+func createDataClusterFromConfig(cfg Config) (datastor.Cluster, error) {
 	// optionally create the global datastor TLS config
 	tlsConfig, err := createTLSConfigFromDatastorTLSConfig(&cfg.DataStor.TLS)
 	if err != nil {
@@ -203,10 +125,9 @@ func createTLSConfigFromDatastorTLSConfig(config *DataStorTLSConfig) (*tls.Confi
 // with the data (zstordb) cluster already created,
 // used to read/write object data, as well as the metastor client,
 // which is used to read/write the metadata of the objects.
+// if metaClient is not nil, the metadata will be written at Write operation
+// using the given metaClient.
 func NewClient(metaClient *metastor.Client, dataPipeline pipeline.Pipeline) *Client {
-	if metaClient == nil {
-		panic("0-stor Client: no metastor client given")
-	}
 	if dataPipeline == nil {
 		panic("0-stor Client: no data pipeline given")
 	}
@@ -266,14 +187,16 @@ func (c *Client) write(key []byte, r io.Reader, userDefinedMeta map[string]strin
 	}
 
 	// store metadata
-	err = c.metastorClient.SetMetadata(md)
+	if c.metastorClient != nil {
+		err = c.metastorClient.SetMetadata(md)
+	}
 	return &md, err
 }
 
 // Read reads the data, from the 0-stor cluster,
 // using the reference information fetched from the storage-retrieved metadata
 // (which is linked to the given key).
-func (c *Client) Read(key []byte, w io.Writer) error {
+/*func (c *Client) Read(key []byte, w io.Writer) error {
 	if len(key) == 0 {
 		return ErrNilKey // ensure a key is given
 	}
@@ -282,24 +205,16 @@ func (c *Client) Read(key []byte, w io.Writer) error {
 		return err
 	}
 	return c.dataPipeline.Read(meta.Chunks, w)
-}
+}*/
 
-// ReadWithMeta reads the data, from the 0-stor cluster,
+// Read reads the data, from the 0-stor cluster,
 // using the reference information fetched from the given metadata.
-func (c *Client) ReadWithMeta(meta metatypes.Metadata, w io.Writer) error {
+func (c *Client) Read(meta metatypes.Metadata, w io.Writer) error {
 	return c.dataPipeline.Read(meta.Chunks, w)
 }
 
 // ReadRange reads data with the given offset & length.
-func (c *Client) ReadRange(key []byte, w io.Writer, offset, length int64) error {
-	if len(key) == 0 {
-		return ErrNilKey // ensure a key is given
-	}
-	meta, err := c.metastorClient.GetMetadata(key)
-	if err != nil {
-		return err
-	}
-
+func (c *Client) ReadRange(meta metatypes.Metadata, w io.Writer, offset, length int64) error {
 	// in case we don't split the data,
 	// no need to worry about which chunk to proceed
 	if meta.ChunkSize == 0 {
@@ -381,22 +296,9 @@ func (rw *rangeWriter) Write(p []byte) (int, error) {
 }
 
 // Delete deletes the data, from the 0-stor cluster,
-// using the reference information fetched from the metadata (which is linked to the given key).
-func (c *Client) Delete(key []byte) error {
-	if len(key) == 0 {
-		return ErrNilKey // ensure a key is given
-	}
-	meta, err := c.metastorClient.GetMetadata(key)
-	if err != nil {
-		return err
-	}
-	return c.DeleteWithMeta(*meta)
-}
-
-// DeleteWithMeta deletes the data, from the 0-stor cluster,
 // using the reference information fetched from the given metadata
 // (which is linked to the given key).
-func (c *Client) DeleteWithMeta(meta metatypes.Metadata) error {
+func (c *Client) Delete(meta metatypes.Metadata) error {
 	// delete data
 	err := c.dataPipeline.Delete(meta.Chunks)
 	if err != nil {
@@ -407,27 +309,10 @@ func (c *Client) DeleteWithMeta(meta metatypes.Metadata) error {
 }
 
 // Check gets the status of data stored in a 0-stor cluster.
-// It does so using the chunks stored as metadata, after fetching those, using the metastor client.
-// If the metadata cannot be fetched or the status of a/the data chunk(s) cannot be retrieved,
-// an error will be returned. Otherwise CheckStatusInvalid indicates the data is invalid and non-repairable,
+// It does so using the chunks stored as metadata
+// CheckStatusInvalid indicates the data is invalid and non-repairable,
 // Any other value indicates the data is readable, but if it's not optimal, it could use a repair.
-func (c *Client) Check(key []byte, fast bool) (storage.CheckStatus, error) {
-	if len(key) == 0 {
-		return storage.CheckStatus(0), ErrNilKey // ensure a key is given
-	}
-	meta, err := c.metastorClient.GetMetadata(key)
-	if err != nil {
-		return storage.CheckStatus(0), err
-	}
-	return c.dataPipeline.Check(meta.Chunks, fast)
-}
-
-// CheckWithMeta gets the status of data stored in a 0-stor cluster.
-// It does so using the chunks stored as metadata, after fetching those, using the metastor client.
-// If the metadata cannot be fetched or the status of a/the data chunk(s) cannot be retrieved,
-// an error will be returned. Otherwise CheckStatusInvalid indicates the data is invalid and non-repairable,
-// Any other value indicates the data is readable, but if it's not optimal, it could use a repair.
-func (c *Client) CheckWithMeta(meta metatypes.Metadata, fast bool) (storage.CheckStatus, error) {
+func (c *Client) Check(meta metatypes.Metadata, fast bool) (storage.CheckStatus, error) {
 	return c.dataPipeline.Check(meta.Chunks, fast)
 }
 
@@ -441,10 +326,7 @@ func (c *Client) CheckWithMeta(meta metatypes.Metadata, fast bool) (storage.Chec
 //
 // if the data has not been distributed or replicated, we can't repair it,
 // or if not enough shards are available we cannot repair it either.
-func (c *Client) Repair(key []byte) (*metatypes.Metadata, error) {
-	if len(key) == 0 {
-		return nil, ErrNilKey // ensure a key is given
-	}
+func (c *Client) Repair(md metatypes.Metadata) (*metatypes.Metadata, error) {
 
 	// because of conflicts, the callback might be called multiple times,
 	// hence why we want to only do the actual repairing once
@@ -453,7 +335,7 @@ func (c *Client) Repair(key []byte) (*metatypes.Metadata, error) {
 		totalSizeAfterRepair int64
 		repairEpoch          int64
 	)
-	return c.metastorClient.UpdateMetadata(key,
+	return c.metastorClient.UpdateMetadata(md.Key,
 		func(meta metatypes.Metadata) (*metatypes.Metadata, error) {
 			// repair if not yet repaired
 			if repairEpoch == 0 {
