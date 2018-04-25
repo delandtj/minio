@@ -32,7 +32,7 @@ type zerostor struct {
 }
 
 // newZerostor creates new zerostor object
-func newZerostor(cfg client.Config, metaDir string) (*zerostor, error) {
+func newZerostor(cfg client.Config, metaDir, metaPrivKey string) (*zerostor, error) {
 	if cfg.Namespace == "" {
 		return nil, fmt.Errorf("empty namespace")
 	}
@@ -44,7 +44,7 @@ func newZerostor(cfg client.Config, metaDir string) (*zerostor, error) {
 	}
 
 	// creates meta client
-	fm, metaCli, err := createMestatorClient(cfg.Namespace, metaDir)
+	fm, metaCli, err := createMestatorClient(cfg.Namespace, metaDir, metaPrivKey)
 	if err != nil {
 		return nil, err
 	}
@@ -219,7 +219,7 @@ func createDataClusterFromConfig(cfg *client.Config) (datastor.Cluster, error) {
 	return zerodb.NewCluster(cfg.DataStor.Shards, cfg.Password, cfg.Namespace, nil)
 }
 
-func createMestatorClient(namespace, metaDir string) (fm meta.Storage, mc *metastor.Client, err error) {
+func createMestatorClient(namespace, metaDir, metaPrivKey string) (fm meta.Storage, mc *metastor.Client, err error) {
 	// create the metadata encoding func pair
 	marshalFuncPair, err := encoding.NewMarshalFuncPair(encoding.DefaultMarshalType)
 	if err != nil {
@@ -233,7 +233,7 @@ func createMestatorClient(namespace, metaDir string) (fm meta.Storage, mc *metas
 		return
 	}
 
-	mc, err = metastor.NewClient(namespace, fm, "")
+	mc, err = metastor.NewClient(namespace, fm, metaPrivKey)
 	return
 }
 

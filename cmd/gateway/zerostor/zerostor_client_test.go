@@ -139,7 +139,7 @@ func newTestInMemZstorClient(namespace string) (*inMemZstorClient, meta.Storage,
 		return nil, nil, nil, nil, "", err
 	}
 
-	fm, metaCli, err := createMestatorClient(namespace, metaDir)
+	fm, metaCli, err := createMestatorClient(namespace, metaDir, "")
 	if err != nil {
 		return nil, nil, nil, nil, "", err
 	}

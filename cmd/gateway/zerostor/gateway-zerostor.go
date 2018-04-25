@@ -25,6 +25,7 @@ const (
 	zerostorBackend         = "zerostor"
 	minioZstorConfigFileVar = "MINIO_ZEROSTOR_CONFIG_FILE"
 	minioZstorMetaDirVar    = "MINIO_ZEROSTOR_META_DIR"
+	minioZstorMetaPrivKey   = "MINIO_ZEROSTOR_META_PRIVKEY"
 	minioZstorDebug         = "MINIO_ZEROSTOR_DEBUG"
 )
 
@@ -62,6 +63,7 @@ ENVIRONMENT VARIABLES:
 
   ` + minioZstorConfigFileVar + `  Zerostor config file(default : $MINIO_CONFIG_DIR/zerostor.yaml)
   ` + minioZstorMetaDirVar + `     Zerostor metadata directory(default : $MINIO_CONFIG_DIR/zerostor_meta)
+  ` + minioZstorMetaPrivKey + ` Zerostor metadata private key(default : ""). Metadata won't be encrypted if the key is not provided
   ` + minioZstorDebug + `        Zerostor debug flag. Set to "1" to enable debugging (default : 0)
 
 EXAMPLES:
@@ -98,15 +100,17 @@ func zerostorGatewayMain(ctx *cli.Context) {
 	}
 
 	minio.StartGateway(ctx, &Zerostor{
-		confFile: confFile,
-		metaDir:  metaDir,
+		confFile:    confFile,
+		metaDir:     metaDir,
+		metaPrivKey: os.Getenv(minioZstorMetaPrivKey),
 	})
 }
 
 // Zerostor implements minio.Gateway interface
 type Zerostor struct {
-	confFile string
-	metaDir  string
+	confFile    string
+	metaDir     string
+	metaPrivKey string
 }
 
 // Name implements minio.Gateway.Name interface
@@ -124,6 +128,7 @@ func (g *Zerostor) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, e
 	// check options
 	log.Println("zerostor config file = ", g.confFile)
 	log.Println("debugging flag: ", debugFlag)
+	log.Println("metadata encrypted: ", g.metaPrivKey != "")
 
 	// read zerostor config
 	storCfg, err := client.ReadConfig(g.confFile)
@@ -132,7 +137,7 @@ func (g *Zerostor) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, e
 	}
 
 	// creates 0-stor  wrapper
-	zstor, err := newZerostor(*storCfg, g.metaDir)
+	zstor, err := newZerostor(*storCfg, g.metaDir, g.metaPrivKey)
 	if err != nil {
 		log.Println("failed to creates zstor client: ", err.Error())
 		return nil, err

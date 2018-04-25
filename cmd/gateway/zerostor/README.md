@@ -11,6 +11,12 @@ location is specified in `MINIO_ZEROSTOR_META_DIR` environment variable.
 0-stor provide metadata using `ETCD` and `Badger`, but this gateway doesn't use them because they
 don't have directory-like behavior.
 
+Metadata will be encrypted with AES encryption if user provide private key through `MINIO_ZEROSTOR_META_PRIVKEY` environment variable.
+What specific AES algorithm is used, depends on the given key size:
+- 16 bytes: AES_128
+- 24 bytes: AES_192
+- 32 bytes: AES_256
+
 
 ## Bucket Management
 
@@ -40,6 +46,7 @@ Standard minio environment variables:
 0-stor gateway environment variables:
 - `MINIO_ZEROSTOR_CONFIG_FILE` :  Zerostor config file(default : $MINIO_CONFIG_DIR/zerostor.yaml). Default minio config dir is $HOME/.minio
 - `MINIO_ZEROSTOR_META_DIR`     Zerostor metadata directory(default : $MINIO_CONFIG_DIR/zerostor_meta)
+- `MINIO_ZEROSTOR_META_PRIVKEY` Zerostor metadata private key(default : ""). Metadata won't be encrypted if the key is not provided
 - `MINIO_ZEROSTOR_DEBUG`        Zerostor debug flag. Set to "1" to enable debugging (default : 0)
 
 Put your 0-stor config file as specified by `MINIO_ZEROSTOR_CONFIG_FILE`.
