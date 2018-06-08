@@ -30,11 +30,12 @@ const (
 // filemeta is file based metadata implementation that implements
 // metaStorage interface
 type filemeta struct {
-	rootDir    string // meta root dir
-	objDir     string // dir of objects meta
-	lock       sync.RWMutex
-	encodeFunc encoding.MarshalMetadata
-	decodeFunc encoding.UnmarshalMetadata
+	rootDir      string // meta root dir
+	objDir       string // dir of objects meta
+	lock         sync.RWMutex
+	readDirCache *readDirCache
+	encodeFunc   encoding.MarshalMetadata
+	decodeFunc   encoding.UnmarshalMetadata
 }
 
 // NewDefaultMetastor creates default Storage implementation.
@@ -46,11 +47,17 @@ func NewDefaultMetastor(rootDir string, marshalFuncPair *encoding.MarshalFuncPai
 		return nil, err
 	}
 
+	rdc, err := newReadDirCache()
+	if err != nil {
+		return nil, err
+	}
+
 	return &filemeta{
-		rootDir:    rootDir,
-		objDir:     objDir,
-		encodeFunc: marshalFuncPair.Marshal,
-		decodeFunc: marshalFuncPair.Unmarshal,
+		rootDir:      rootDir,
+		objDir:       objDir,
+		readDirCache: rdc,
+		encodeFunc:   marshalFuncPair.Marshal,
+		decodeFunc:   marshalFuncPair.Unmarshal,
 	}, nil
 }
 
@@ -240,11 +247,8 @@ func (fm *filemeta) readDir(bucket, dir, marker, delimiter string, maxKeys int) 
 		return
 	}
 
-	fios, err := ioutil.ReadDir(absDir)
+	names, err := fm.readDirCache.GetNames(absDir)
 	if err != nil {
-		if os.IsNotExist(err) {
-			err = db.ErrNotFound
-		}
 		return
 	}
 
@@ -254,26 +258,42 @@ func (fm *filemeta) readDir(bucket, dir, marker, delimiter string, maxKeys int) 
 	)
 	marker = filepath.Base(marker)
 
-	for _, f := range fios {
+	for _, name := range names {
 		if numKeys == maxKeys {
 			return
 		}
 		if afterMarker == false {
-			if f.Name() == marker {
+			if name == marker {
 				afterMarker = true
 			}
 			continue
 		}
 		numKeys++
 
-		if f.IsDir() {
-			dirs = append(dirs, f.Name())
-		} else {
-			files = append(files, f.Name())
+		var isDir bool
+
+		isDir, err = isDirectory(absDir, name)
+		if err != nil {
+			return
 		}
-		nextMarker = f.Name()
+		if isDir {
+			dirs = append(dirs, name)
+		} else {
+			files = append(files, name)
+		}
+		nextMarker = name
 	}
 	return
+}
+
+// TODO: consider to  put this operation in the readDirCache
+func isDirectory(dir, name string) (bool, error) {
+	info, err := os.Lstat(filepath.Join(dir, name))
+	if err != nil {
+		return false, err
+	}
+
+	return info.IsDir(), nil
 }
 
 func (fm *filemeta) readDirRecursive(absDir, marker string, maxKeys int) (files []string, nextMarker string, err error) {
