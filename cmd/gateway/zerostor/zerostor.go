@@ -11,7 +11,7 @@ import (
 	"github.com/garyburd/redigo/redis"
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/cmd/gateway/zerostor/meta"
-	"github.com/minio/minio/cmd/gateway/zerostor/multipart"
+	//"github.com/minio/minio/cmd/gateway/zerostor/multipart"
 	"github.com/zero-os/0-stor/client"
 	"github.com/zero-os/0-stor/client/datastor"
 	"github.com/zero-os/0-stor/client/datastor/pipeline"
@@ -38,13 +38,13 @@ func newZerostor(cfg client.Config, metaDir, metaPrivKey string) (*zerostor, err
 	}
 
 	// creates bucket manager
-	bktMgr, err := meta.NewDefaultBucketMgr(metaDir, multipart.MultipartBucket)
+	/*bktMgr, err := meta.NewDefaultBucketMgr(metaDir, multipart.MultipartBucket)
 	if err != nil {
 		return nil, err
-	}
+	}*/
 
 	// creates meta client
-	fm, metaCli, err := createMestatorClient(cfg.Namespace, metaDir, metaPrivKey)
+	fm, bktMgr, metaCli, err := createMestatorClient(cfg.Namespace, metaDir, metaPrivKey)
 	if err != nil {
 		return nil, err
 	}
@@ -219,7 +219,7 @@ func createDataClusterFromConfig(cfg *client.Config) (datastor.Cluster, error) {
 	return zerodb.NewCluster(cfg.DataStor.Shards, cfg.Password, cfg.Namespace, nil)
 }
 
-func createMestatorClient(namespace, metaDir, metaPrivKey string) (fm meta.Storage, mc *metastor.Client, err error) {
+func createMestatorClient(namespace, metaDir, metaPrivKey string) (fm meta.Storage, bktMgr meta.BucketManager, mc *metastor.Client, err error) {
 	// create the metadata encoding func pair
 	marshalFuncPair, err := encoding.NewMarshalFuncPair(encoding.DefaultMarshalType)
 	if err != nil {
@@ -228,10 +228,17 @@ func createMestatorClient(namespace, metaDir, metaPrivKey string) (fm meta.Stora
 
 	// create metastor database first,
 	// so that then we can create the Metastor client itself
-	fm, err = meta.NewDefaultMetastor(metaDir, marshalFuncPair)
+	//fm, err = meta.NewDefaultMetastor(metaDir, marshalFuncPair)
+	var mms *meta.MongoMetaStor
+	mms, err = meta.NewMongoMetaStor("localhost:27017", "kodok", marshalFuncPair)
 	if err != nil {
+		log.Printf("failed to connect to metastor:%v\n", err)
 		return
 	}
+
+	// TODO : clean it up
+	bktMgr = meta.NewMongoBucketManager(mms)
+	fm = mms
 
 	mc, err = metastor.NewClient(namespace, fm, metaPrivKey)
 	return
