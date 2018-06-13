@@ -23,6 +23,9 @@ What specific AES algorithm is used, depends on the given key size:
 Because 0-stor doesn't have `bucket` concept, all bucket management are handled by 
 the gateway, including the bucket policy.
 
+## Config Reload
+
+This gateway configuration could be reloaded by sending `SIGHUP` to the process.
 
 ## Running
 

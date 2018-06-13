@@ -157,7 +157,7 @@ func TestGatewayObjectRoundTrip(t *testing.T) {
 	// copy object - get & check
 	{
 		destBucket := "destBucket"
-		zo.(*zerostorObjects).bktMgr.Create(destBucket)
+		zo.(*zerostorObjects)._zstor.bktMgr.Create(destBucket)
 		_, err = zo.CopyObject(ctx, bucket, object, destBucket, object, minio.ObjectInfo{})
 		if err != nil {
 			t.Fatalf("CopyObject failed: %v", err)

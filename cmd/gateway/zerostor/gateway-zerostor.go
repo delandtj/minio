@@ -5,7 +5,10 @@ import (
 	goerrors "errors"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"sync"
+	"syscall"
 
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/pkg/policy"
@@ -111,6 +114,7 @@ type Zerostor struct {
 	confFile    string
 	metaDir     string
 	metaPrivKey string
+	zo          *zerostorObjects
 }
 
 // Name implements minio.Gateway.Name interface
@@ -143,9 +147,16 @@ func (g *Zerostor) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, e
 		return nil, err
 	}
 
-	return newGatewayLayerWithZerostor(zstor, g.metaDir)
+	zo, err := newGatewayLayerWithZerostor(zstor, g.metaDir)
+	if err != nil {
+		return nil, err
+	}
+
+	go zo.handleConfigReload(g.confFile, g.metaDir, g.metaPrivKey)
+	return zo, nil
 }
-func newGatewayLayerWithZerostor(zstor *zerostor, metaDir string) (minio.ObjectLayer, error) {
+
+func newGatewayLayerWithZerostor(zstor *zerostor, metaDir string) (*zerostorObjects, error) {
 	// creates multipart upload manager
 	mpartMgr, err := multipart.NewDefaultManager(zstor, metaDir)
 	if err != nil {
@@ -153,22 +164,93 @@ func newGatewayLayerWithZerostor(zstor *zerostor, metaDir string) (minio.ObjectL
 	}
 
 	return &zerostorObjects{
-		zstor:        zstor,
-		bktMgr:       zstor.bktMgr,
-		multipartMgr: mpartMgr,
+		_zstor:        zstor,
+		_multipartMgr: mpartMgr,
 	}, nil
 }
 
 type zerostorObjects struct {
 	minio.GatewayUnsupported
-	zstor        *zerostor
-	bktMgr       meta.BucketManager
-	multipartMgr multipart.Manager
-	debug        bool
+	_zstor        *zerostor
+	_multipartMgr multipart.Manager
+	mux           sync.RWMutex
+	debug         bool
+
+	// configuration fields
+	metaDir     string
+	metaPrivKey string
+	confFile    string
+}
+
+func (zo *zerostorObjects) handleConfigReload(confFile, metaDir, metaPrivKey string) {
+	sigCh := make(chan os.Signal, 1)
+
+	signal.Notify(sigCh, syscall.SIGHUP)
+
+	go func() {
+		for {
+			log.Println("Got SIGHUP:reload the config")
+			<-sigCh
+			zo.loadConfig(confFile, metaDir, metaPrivKey)
+		}
+	}()
+}
+
+func (zo *zerostorObjects) loadConfig(confFile, metaDir, metaPrivKey string) error {
+	// read zerostor config
+	storCfg, err := client.ReadConfig(confFile)
+	if err != nil {
+		return err
+	}
+
+	// creates 0-stor  wrapper
+	zstor, err := newZerostor(*storCfg, metaDir, metaPrivKey)
+	if err != nil {
+		log.Println("failed to creates zstor client: ", err.Error())
+		return err
+	}
+
+	// creates multipart upload manager
+	mpartMgr, err := multipart.NewDefaultManager(zstor, metaDir)
+	if err != nil {
+		return err
+	}
+
+	zo.mux.Lock()
+	zo._zstor = zstor
+	zo._multipartMgr = mpartMgr
+	zo.mux.Unlock()
+
+	return nil
+}
+
+func (zo *zerostorObjects) getZstor() *zerostor {
+	zo.mux.RLock()
+	zstor := zo._zstor
+	zo.mux.RUnlock()
+
+	return zstor
+}
+
+func (zo *zerostorObjects) getBktMgr() meta.BucketManager {
+	zo.mux.RLock()
+	mgr := zo._zstor.bktMgr
+	zo.mux.RUnlock()
+	return mgr
+}
+
+func (zo *zerostorObjects) getMultipartMgr() multipart.Manager {
+	zo.mux.RLock()
+	mgr := zo._multipartMgr
+	zo.mux.RUnlock()
+
+	return mgr
 }
 
 func (zo *zerostorObjects) GetBucketInfo(ctx context.Context, bucket string) (bucketInfo minio.BucketInfo, err error) {
-	bkt, err := zo.bktMgr.Get(bucket)
+	bktMgr := zo.getBktMgr()
+
+	bkt, err := bktMgr.Get(bucket)
 	if err != nil {
 		return
 	}
@@ -180,12 +262,16 @@ func (zo *zerostorObjects) GetBucketInfo(ctx context.Context, bucket string) (bu
 
 func (zo *zerostorObjects) DeleteBucket(ctx context.Context, bucket string) error {
 	log.Println("DeleteBucket ", bucket)
-	err := zo.bktMgr.Del(bucket)
+	bktMgr := zo.getBktMgr()
+
+	err := bktMgr.Del(bucket)
 	return zstorToObjectErr(errors.Trace(err), bucket)
 }
 
 func (zo *zerostorObjects) ListBuckets(ctx context.Context) ([]minio.BucketInfo, error) {
-	allBuckets, err := zo.bktMgr.GetAllBuckets()
+	bktMgr := zo.getBktMgr()
+
+	allBuckets, err := bktMgr.GetAllBuckets()
 	if err != nil {
 		return nil, zstorToObjectErr(errors.Trace(err))
 	}
@@ -203,8 +289,8 @@ func (zo *zerostorObjects) ListBuckets(ctx context.Context) ([]minio.BucketInfo,
 
 func (zo *zerostorObjects) MakeBucketWithLocation(ctx context.Context, bucket string, location string) error {
 	log.Printf("MakeBucketWithLocation bucket=%v, location=%v\n", bucket, location)
-
-	err := zo.bktMgr.Create(bucket)
+	bktMgr := zo.getBktMgr()
+	err := bktMgr.Create(bucket)
 	return zstorToObjectErr(errors.Trace(err), bucket)
 }
 
@@ -212,7 +298,9 @@ func (zo *zerostorObjects) MakeBucketWithLocation(ctx context.Context, bucket st
 func (zo *zerostorObjects) GetBucketPolicy(ctx context.Context, bucket string) (policy.BucketAccessPolicy, error) {
 	var pol policy.BucketAccessPolicy
 
-	bkt, err := zo.bktMgr.Get(bucket)
+	bktMgr := zo.getBktMgr()
+
+	bkt, err := bktMgr.Get(bucket)
 	if err != nil {
 		return pol, zstorToObjectErr(errors.Trace(err), bucket)
 	}
@@ -242,25 +330,30 @@ func (zo *zerostorObjects) SetBucketPolicy(ctx context.Context, bucket string, p
 	}
 
 	// save the new policy
-	err := zo.bktMgr.SetPolicy(bucket, pol)
+	bktMgr := zo.getBktMgr()
+	err := bktMgr.SetPolicy(bucket, pol)
 
 	return zstorToObjectErr(errors.Trace(err), bucket)
 }
 
 func (zo *zerostorObjects) DeleteBucketPolicy(ctx context.Context, bucket string) error {
-	err := zo.bktMgr.SetPolicy(bucket, policy.BucketPolicyNone)
+	bktMgr := zo.getBktMgr()
+	err := bktMgr.SetPolicy(bucket, policy.BucketPolicyNone)
 	return zstorToObjectErr(errors.Trace(err), bucket)
 }
 
 func (zo *zerostorObjects) DeleteObject(ctx context.Context, bucket, object string) error {
-	err := zo.zstor.Delete(bucket, object)
+	zstor := zo.getZstor()
+
+	err := zstor.Delete(bucket, object)
 	return zstorToObjectErr(errors.Trace(err), bucket, object)
 }
 
 func (zo *zerostorObjects) CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo minio.ObjectInfo) (objInfo minio.ObjectInfo, err error) {
 
+	zstor := zo.getZstor()
 	// get meta of src object
-	srcMd, err := zo.zstor.getMeta(srcBucket, srcObject)
+	srcMd, err := zstor.getMeta(srcBucket, srcObject)
 	if err != nil {
 		err = zstorToObjectErr(errors.Trace(err), srcBucket, srcObject)
 		return
@@ -274,10 +367,10 @@ func (zo *zerostorObjects) CopyObject(ctx context.Context, srcBucket, srcObject,
 
 	go func() {
 		defer pw.Close()
-		zo.zstor.storCli.Read(*srcMd, pw)
+		zstor.storCli.Read(*srcMd, pw)
 	}()
 
-	dstMd, err := zo.zstor.Write(destBucket, destObject, pr, srcInfo.UserDefined)
+	dstMd, err := zstor.Write(destBucket, destObject, pr, srcInfo.UserDefined)
 	if err != nil {
 		err = zstorToObjectErr(errors.Trace(err), destBucket, destObject)
 		return
@@ -292,22 +385,25 @@ func (zo *zerostorObjects) GetObject(ctx context.Context, bucket, object string,
 	debugf("GetObject bucket:%v, object:%v, offset:%v, length:%v, etag:%v\n",
 		bucket, object, startOffset, length, etag)
 
+	zstor := zo.getZstor()
 	// TODO : handle etag
 
 	var err error
 	if startOffset == 0 && length <= 0 {
 		debugln("\tGetObject using zerostor Read")
-		err = zo.zstor.Read(bucket, object, writer)
+		err = zstor.Read(bucket, object, writer)
 	} else {
 		debugln("\tGetObject using zerostor ReadRange")
-		err = zo.zstor.ReadRange(bucket, object, writer, startOffset, length)
+		err = zstor.ReadRange(bucket, object, writer, startOffset, length)
 	}
 	return zstorToObjectErr(errors.Trace(err), bucket, object)
 }
 
 func (zo *zerostorObjects) GetObjectInfo(ctx context.Context, bucket, object string) (objInfo minio.ObjectInfo, err error) {
+	zstor := zo.getZstor()
+
 	// get meta
-	md, err := zo.zstor.getMeta(bucket, object)
+	md, err := zstor.getMeta(bucket, object)
 	if err != nil {
 		err = zstorToObjectErr(errors.Trace(err), bucket, object)
 		return
@@ -321,8 +417,10 @@ func (zo *zerostorObjects) ListObjects(ctx context.Context, bucket, prefix, mark
 	debugf("ListObjects bucket:%v, prefix:%v, marker:%v, delimiter:%v, maxKeys:%v\n",
 		bucket, prefix, marker, delimiter, maxKeys)
 
+	zstor := zo.getZstor()
+
 	// get objects
-	result, err = zo.zstor.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
+	result, err = zstor.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
 		err = zstorToObjectErr(errors.Trace(err), bucket)
 		return
@@ -346,8 +444,10 @@ func (zo *zerostorObjects) putObject(bucket, object string, rd io.Reader, metada
 	}
 	metadata[meta.ETagKey] = etag
 
+	zstor := zo.getZstor()
+
 	// write to 0-stor
-	md, err := zo.zstor.Write(bucket, object, rd, metadata)
+	md, err := zstor.Write(bucket, object, rd, metadata)
 	if err != nil {
 		log.Printf("PutObject bucket:%v, object:%v, failed: %v\n", bucket, object, err)
 		err = zstorToObjectErr(errors.Trace(err), bucket, object)
@@ -360,7 +460,9 @@ func (zo *zerostorObjects) putObject(bucket, object string, rd io.Reader, metada
 
 // NewMultipartUpload implements minio.ObjectLayer.NewMultipartUpload
 func (zo *zerostorObjects) NewMultipartUpload(ctx context.Context, bucket, object string, metadata map[string]string) (uploadID string, err error) {
-	uploadID, err = zo.multipartMgr.Init(bucket, object, metadata)
+	multipartMgr := zo.getMultipartMgr()
+
+	uploadID, err = multipartMgr.Init(bucket, object, metadata)
 
 	debugf("NewMultipartUpload bucket:%v, object:%v, uploadID:%v\n", bucket, object, uploadID)
 
@@ -379,8 +481,9 @@ func (zo *zerostorObjects) putObjectPart(ctx context.Context, bucket, object, up
 	if etag == "" {
 		etag = minio.GenETag()
 	}
+	multipartMgr := zo.getMultipartMgr()
 
-	info, err = zo.multipartMgr.UploadPart(bucket, object, uploadID, etag, partID, rd)
+	info, err = multipartMgr.UploadPart(bucket, object, uploadID, etag, partID, rd)
 	if err != nil {
 		log.Printf("PutObjectPart id:%v, partID:%v, err: %v\n", uploadID, partID, err)
 		err = zstorToObjectErr(errors.Trace(err), bucket, object)
@@ -391,6 +494,7 @@ func (zo *zerostorObjects) putObjectPart(ctx context.Context, bucket, object, up
 // CopyObjectPart implements ObjectLayer.CopyObjectPart
 func (zo *zerostorObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, uploadID string, partID int, startOffset int64, length int64, srcInfo minio.ObjectInfo) (minio.PartInfo, error) {
 
+	zstor := zo.getZstor()
 	// get metadata of source object
 	storRd, storWr := io.Pipe()
 	defer storRd.Close()
@@ -398,9 +502,9 @@ func (zo *zerostorObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObj
 	go func() {
 		defer storWr.Close()
 		if startOffset == 0 && length <= 0 {
-			zo.zstor.Read(srcBucket, srcObject, storWr)
+			zstor.Read(srcBucket, srcObject, storWr)
 		} else {
-			zo.zstor.ReadRange(srcBucket, srcObject, storWr, startOffset, length)
+			zstor.ReadRange(srcBucket, srcObject, storWr, startOffset, length)
 		}
 	}()
 
@@ -411,7 +515,9 @@ func (zo *zerostorObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObj
 func (zo *zerostorObjects) CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string,
 	parts []minio.CompletePart) (info minio.ObjectInfo, err error) {
 
-	md, err := zo.multipartMgr.Complete(bucket, object, uploadID, parts)
+	multipartMgr := zo.getMultipartMgr()
+
+	md, err := multipartMgr.Complete(bucket, object, uploadID, parts)
 	if err != nil {
 		log.Printf("CompleteMultipartUpload for uploadID `%v` failed: %v\n", uploadID, err)
 		err = zstorToObjectErr(errors.Trace(err), bucket, object)
@@ -423,7 +529,8 @@ func (zo *zerostorObjects) CompleteMultipartUpload(ctx context.Context, bucket, 
 
 // AbortMultipartUpload implements minio.ObjectLayer.AbortMultipartUpload
 func (zo *zerostorObjects) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string) error {
-	err := zo.multipartMgr.Abort(bucket, object, uploadID)
+	multipartMgr := zo.getMultipartMgr()
+	err := multipartMgr.Abort(bucket, object, uploadID)
 	return zstorToObjectErr(errors.Trace(err), bucket, object)
 }
 
@@ -431,7 +538,8 @@ func (zo *zerostorObjects) AbortMultipartUpload(ctx context.Context, bucket, obj
 // Note: because of lack of docs and example in production ready gateway,
 // we don't respect : prefix, keyMarker, uploadIDMarker, delimiter, and maxUploads
 func (zo *zerostorObjects) ListMultipartUploads(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result minio.ListMultipartsInfo, err error) {
-	result, err = zo.multipartMgr.ListUpload(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
+	multipartMgr := zo.getMultipartMgr()
+	result, err = multipartMgr.ListUpload(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
 	if err != nil {
 		err = zstorToObjectErr(errors.Trace(err), bucket)
 	}
@@ -440,7 +548,8 @@ func (zo *zerostorObjects) ListMultipartUploads(ctx context.Context, bucket, pre
 
 // ListObjectParts implements ObjectLayer.ListObjectParts
 func (zo *zerostorObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker, maxParts int) (result minio.ListPartsInfo, err error) {
-	result, err = zo.multipartMgr.ListParts(bucket, object, uploadID, partNumberMarker, maxParts)
+	multipartMgr := zo.getMultipartMgr()
+	result, err = multipartMgr.ListParts(bucket, object, uploadID, partNumberMarker, maxParts)
 	if err != nil {
 		log.Println("ListObjectParts failed: %v", err)
 	}
@@ -449,13 +558,15 @@ func (zo *zerostorObjects) ListObjectParts(ctx context.Context, bucket, object, 
 
 // Shutdown implements ObjectLayer.Shutdown
 func (zo *zerostorObjects) Shutdown(ctx context.Context) error {
-	return zo.zstor.Close()
+	zstor := zo.getZstor()
+	return zstor.Close()
 }
 
 // StorageInfo implements ObjectLayer.StorageInfo
 func (zo *zerostorObjects) StorageInfo(ctx context.Context) (info minio.StorageInfo) {
 	log.Println("StorageInfo")
-	info, err := zo.zstor.StorageInfo()
+	zstor := zo.getZstor()
+	info, err := zstor.StorageInfo()
 	if err != nil {
 		log.Printf("StorageInfo failed: %v", err)
 	}
