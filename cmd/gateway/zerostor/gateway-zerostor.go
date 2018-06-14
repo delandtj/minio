@@ -19,7 +19,6 @@ import (
 	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 
-	"github.com/zero-os/0-stor/client"
 	"github.com/zero-os/0-stor/client/datastor"
 	"github.com/zero-os/0-stor/client/metastor"
 )
@@ -134,14 +133,8 @@ func (g *Zerostor) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, e
 	log.Println("debugging flag: ", debugFlag)
 	log.Println("metadata encrypted: ", g.metaPrivKey != "")
 
-	// read zerostor config
-	storCfg, err := client.ReadConfig(g.confFile)
-	if err != nil {
-		return nil, err
-	}
-
 	// creates 0-stor  wrapper
-	zstor, err := newZerostor(*storCfg, g.metaDir, g.metaPrivKey)
+	zstor, err := newZerostor(g.confFile, g.metaDir, g.metaPrivKey)
 	if err != nil {
 		log.Println("failed to creates zstor client: ", err.Error())
 		return nil, err
@@ -197,14 +190,8 @@ func (zo *zerostorObjects) handleConfigReload(confFile, metaDir, metaPrivKey str
 }
 
 func (zo *zerostorObjects) loadConfig(confFile, metaDir, metaPrivKey string) error {
-	// read zerostor config
-	storCfg, err := client.ReadConfig(confFile)
-	if err != nil {
-		return err
-	}
-
 	// creates 0-stor  wrapper
-	zstor, err := newZerostor(*storCfg, metaDir, metaPrivKey)
+	zstor, err := newZerostor(confFile, metaDir, metaPrivKey)
 	if err != nil {
 		log.Println("failed to creates zstor client: ", err.Error())
 		return err

@@ -11,7 +11,7 @@ import (
 	"github.com/garyburd/redigo/redis"
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/cmd/gateway/zerostor/meta"
-	//"github.com/minio/minio/cmd/gateway/zerostor/multipart"
+	"github.com/minio/minio/cmd/gateway/zerostor/multipart"
 	"github.com/zero-os/0-stor/client"
 	"github.com/zero-os/0-stor/client/datastor"
 	"github.com/zero-os/0-stor/client/datastor/pipeline"
@@ -32,24 +32,30 @@ type zerostor struct {
 }
 
 // newZerostor creates new zerostor object
-func newZerostor(cfg client.Config, metaDir, metaPrivKey string) (*zerostor, error) {
+func newZerostor(confFile, metaDir, metaPrivKey string) (*zerostor, error) {
+	// read zerostor config
+	cfg, err := client.ReadConfig(confFile)
+	if err != nil {
+		return nil, err
+	}
+
 	if cfg.Namespace == "" {
 		return nil, fmt.Errorf("empty namespace")
 	}
 
-	// creates bucket manager
-	/*bktMgr, err := meta.NewDefaultBucketMgr(metaDir, multipart.MultipartBucket)
-	if err != nil {
-		return nil, err
-	}*/
-
-	// creates meta client
-	fm, bktMgr, metaCli, err := createMestatorClient(cfg.Namespace, metaDir, metaPrivKey)
+	// minio zerostor metadata & bucket manger
+	metaStor, bktMgr, err := newZstorMeta(confFile, metaDir)
 	if err != nil {
 		return nil, err
 	}
 
-	datastorCluster, err := createDataClusterFromConfig(&cfg)
+	// zerostor meta client
+	metaCli, err := metastor.NewClient(cfg.Namespace, metaStor, metaPrivKey)
+	if err != nil {
+		return nil, err
+	}
+
+	datastorCluster, err := createDataClusterFromConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +71,7 @@ func newZerostor(cfg client.Config, metaDir, metaPrivKey string) (*zerostor, err
 
 	return &zerostor{
 		storCli:   cli,
-		metaStor:  fm,
+		metaStor:  metaStor,
 		bktMgr:    bktMgr,
 		zdbShards: cfg.DataStor.Shards,
 		namespace: cfg.Namespace,
@@ -219,28 +225,44 @@ func createDataClusterFromConfig(cfg *client.Config) (datastor.Cluster, error) {
 	return zerodb.NewCluster(cfg.DataStor.Shards, cfg.Password, cfg.Namespace, nil)
 }
 
-func createMestatorClient(namespace, metaDir, metaPrivKey string) (fm meta.Storage, bktMgr meta.BucketManager, mc *metastor.Client, err error) {
+func newZstorMeta(confFile, metaDir string) (metaStor meta.Storage, bktMgr meta.BucketManager, err error) {
+	// read config
+	cfg, err := readConfig(confFile)
+	if err != nil {
+		return
+	}
+
 	// create the metadata encoding func pair
-	marshalFuncPair, err := encoding.NewMarshalFuncPair(encoding.DefaultMarshalType)
+	marshalFnPair, err := encoding.NewMarshalFuncPair(encoding.DefaultMarshalType)
 	if err != nil {
 		return
 	}
 
-	// create metastor database first,
-	// so that then we can create the Metastor client itself
-	//fm, err = meta.NewDefaultMetastor(metaDir, marshalFuncPair)
-	var mms *meta.MongoMetaStor
-	mms, err = meta.NewMongoMetaStor("localhost:27017", "kodok", marshalFuncPair)
-	if err != nil {
-		log.Printf("failed to connect to metastor:%v\n", err)
+	switch cfg.ZerostorMeta.Type {
+	case metaTypeMongo:
+		var (
+			mongoStor *meta.MongoMetaStor
+			mongoCfg  = cfg.ZerostorMeta.Mongo
+		)
+		mongoStor, err = meta.NewMongoMetaStor(mongoCfg.URL, mongoCfg.Database, marshalFnPair)
+		if err != nil {
+			return
+		}
+		bktMgr = mongoStor.BucketManager()
+		metaStor = mongoStor
+	case metaTypeFile:
+		metaStor, err = meta.NewDefaultMetastor(metaDir, marshalFnPair)
+		if err != nil {
+			return
+		}
+		bktMgr, err = meta.NewDefaultBucketMgr(metaDir, multipart.MultipartBucket)
+		if err != nil {
+			return
+		}
+	default:
+		err = fmt.Errorf("invalid zerostor meta type:%v", cfg.ZerostorMeta.Type)
 		return
 	}
-
-	// TODO : clean it up
-	bktMgr = meta.NewMongoBucketManager(mms)
-	fm = mms
-
-	mc, err = metastor.NewClient(namespace, fm, metaPrivKey)
 	return
 }
 

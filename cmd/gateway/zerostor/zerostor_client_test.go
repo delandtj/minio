@@ -12,6 +12,7 @@ import (
 	"github.com/zero-os/0-stor/client/datastor"
 	"github.com/zero-os/0-stor/client/datastor/pipeline/storage"
 	"github.com/zero-os/0-stor/client/metastor"
+	"github.com/zero-os/0-stor/client/metastor/encoding"
 	"github.com/zero-os/0-stor/client/metastor/metatypes"
 )
 
@@ -138,8 +139,20 @@ func newTestInMemZstorClient(namespace string) (*inMemZstorClient, meta.Storage,
 	if err != nil {
 		return nil, nil, nil, nil, "", err
 	}
+	// create the metadata encoding func pair
+	marshalFuncPair, err := encoding.NewMarshalFuncPair(encoding.DefaultMarshalType)
+	if err != nil {
+		return nil, nil, nil, nil, "", err
+	}
 
-	fm, metaCli, err := createMestatorClient(namespace, metaDir, "")
+	// create metastor database first,
+	// so that then we can create the Metastor client itself
+	fm, err := meta.NewDefaultMetastor(metaDir, marshalFuncPair)
+	if err != nil {
+		return nil, nil, nil, nil, "", err
+	}
+
+	metaCli, err := metastor.NewClient(namespace, fm, "")
 	if err != nil {
 		return nil, nil, nil, nil, "", err
 	}
