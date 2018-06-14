@@ -102,6 +102,9 @@ func (mm *MongoMetaStor) Get(namespace, key []byte) ([]byte, error) {
 	ses.Close()
 
 	if err != nil {
+		if err == mgo.ErrNotFound {
+			return nil, db.ErrNotFound
+		}
 		return nil, err
 	}
 
@@ -134,6 +137,7 @@ func (mm *MongoMetaStor) Update(namespace, key []byte, cb db.UpdateCallback) err
 	return fmt.Errorf("Update is not implemented yet")
 }
 
+// ListKeys implements metastor.DB.ListKeys
 func (mm *MongoMetaStor) ListKeys(namespace []byte, cb db.ListCallback) error {
 	return fmt.Errorf("ListKeys is not implemented yet")
 
@@ -155,6 +159,7 @@ func (mm *MongoMetaStor) GetDecodeMeta(key []byte) (*metatypes.Metadata, error) 
 	return &md, err
 }
 
+// ListObjects implements Storage.ListObjects
 func (mm *MongoMetaStor) ListObjects(bucket, prefix, marker, delimiter string,
 	maxKeys int) (minio.ListObjectsInfo, error) {
 	ses := mm.getSession()
@@ -198,21 +203,22 @@ func (mm *MongoMetaStor) listDir(ses *mgo.Session, bucket, prefix, marker, delim
 	maxKeys int) (result minio.ListObjectsInfo, err error) {
 
 	var (
-		entries    []mongoEntry
-		nextMarker string
-		parent     interface{}
+		entries     []mongoEntry
+		nextMarker  string
+		parent      interface{}
+		isRecursive = delimiter == ""
 	)
 
 	// query the DB
 	parent = path.Join(bucket, prefix) + "/"
-	if delimiter == "" { // recursive list
+	if isRecursive {
 		parent = bson.M{"$regex": fmt.Sprintf("^%s?", parent)}
 	}
+
 	findQuery := bson.M{
 		"_id":    bson.M{"$gt": marker},
 		"parent": parent,
 	}
-	fmt.Printf("listDir parent:%v, \n\tq: %v\n", parent, findQuery)
 	err = mm.getCol(ses).Find(findQuery).
 		Sort("_id").
 		Limit(maxKeys).
@@ -221,12 +227,15 @@ func (mm *MongoMetaStor) listDir(ses *mgo.Session, bucket, prefix, marker, delim
 		return
 	}
 
+	prefixToTrim := bucket + "/"
 	for _, e := range entries {
-		key := strings.TrimPrefix(e.Key(), bucket)
+		key := strings.TrimPrefix(e.Key(), prefixToTrim)
 		if e.isDir() {
-			// directory must be ended with '/' to be shown properly
-			// in the web UI
-			result.Prefixes = append(result.Prefixes, path.Join(key, "/"))
+			if !isRecursive { // recursive list doesn't return the dir
+				// directory must be ended with '/' to be shown properly
+				// in the web UI
+				result.Prefixes = append(result.Prefixes, key+"/")
+			}
 		} else {
 			var md metatypes.Metadata
 
@@ -263,6 +272,10 @@ func (mm *MongoMetaStor) parent(key string) string {
 // mongodb session and namespace
 func (mm *MongoMetaStor) getCol(ses *mgo.Session) *mgo.Collection {
 	return ses.DB(mm.dbName).C("metastor")
+}
+
+func (mm *MongoMetaStor) dropDB() {
+	mm.ses.DB(mm.dbName).DropDatabase()
 }
 
 // getSession clone/copy session from main session,

@@ -1,22 +1,21 @@
 package meta
 
 import (
-	"io/ioutil"
-	"os"
 	"sort"
 	"testing"
 
 	"github.com/minio/minio-go/pkg/policy"
 )
 
-func TestCreateGetBucketMgr(t *testing.T) {
-	bktMgr, metaDir, err := newTestBucketMgr()
-	if err != nil {
-		t.Fatalf("failed to create test bucket manager: %v", err)
-	}
-	defer os.RemoveAll(metaDir)
+type bktMgrConstructor func() (BucketManager, error)
 
-	bucketsToCreate := []string{"bucket_1", "bucket_2", "bucket_3", "bucket_4"}
+func testBucketMgrRoundTrip(t *testing.T, bktMgr BucketManager,
+	constructor bktMgrConstructor) {
+
+	var (
+		bucketsToCreate = []string{"bucket_1", "bucket_2", "bucket_3", "bucket_4"}
+		err             error
+	)
 	sort.Strings(bucketsToCreate) // sort it so we can easily compare it
 
 	// create buckets
@@ -71,7 +70,7 @@ func TestCreateGetBucketMgr(t *testing.T) {
 		checkGetBuckets(bktMgr, bucketsToCreate, "check in memory bucket manager")
 
 		// check bucket manager, with all data being loaded from file
-		loadedBktMgr, err := NewDefaultBucketMgr(metaDir)
+		loadedBktMgr, err := constructor()
 		if err != nil {
 			t.Fatalf("failed to load bucket manager: %v", err)
 		}
@@ -92,7 +91,7 @@ func TestCreateGetBucketMgr(t *testing.T) {
 			"check in memory bucket manager after deletion")
 
 		// check bucket manager, with all data being loaded from file
-		loadedBktMgr, err := NewDefaultBucketMgr(metaDir)
+		loadedBktMgr, err := constructor()
 		if err != nil {
 			t.Fatalf("failed to load bucket manager: %v", err)
 		}
@@ -101,20 +100,14 @@ func TestCreateGetBucketMgr(t *testing.T) {
 	}
 }
 
-func TestBucketPolicy(t *testing.T) {
-	bktMgr, metaDir, err := newTestBucketMgr()
-	if err != nil {
-		t.Fatalf("failed to create test bucket manager: %v", err)
-	}
-	defer os.RemoveAll(metaDir)
-
+func testBucketMgrPolicy(t *testing.T, bktMgr BucketManager, constructor bktMgrConstructor) {
 	const (
 		bucketName  = "bucket_1"
 		policyToSet = policy.BucketPolicyReadOnly
 	)
 
 	// create bucket
-	err = bktMgr.Create(bucketName)
+	err := bktMgr.Create(bucketName)
 	if err != nil {
 		t.Errorf("failed to create bucket `%v`: %v", bucketName, err)
 	}
@@ -150,23 +143,10 @@ func TestBucketPolicy(t *testing.T) {
 	checkBucketPolicy(bktMgr, "check in memory bucket manager")
 
 	// check bucket manager, with all data being loaded from file
-	loadedBktMgr, err := NewDefaultBucketMgr(metaDir)
+	loadedBktMgr, err := constructor()
 	if err != nil {
 		t.Fatalf("failed to load bucket manager: %v", err)
 	}
 
 	checkBucketPolicy(loadedBktMgr, "check on disk bucket manager")
-}
-
-func newTestBucketMgr() (bktMgr BucketManager, metaDir string, err error) {
-	metaDir, err = ioutil.TempDir("", "")
-	if err != nil {
-		return
-	}
-
-	bktMgr, err = NewDefaultBucketMgr(metaDir)
-	if err != nil {
-		os.RemoveAll(metaDir)
-	}
-	return
 }

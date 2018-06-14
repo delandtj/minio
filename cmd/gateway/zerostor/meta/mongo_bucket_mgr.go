@@ -13,32 +13,39 @@ const (
 	bucketParent = "."
 )
 
+// MongoBucketManager defines a bucket manager with mongodb as DB backend
 type MongoBucketManager struct {
 	mms *MongoMetaStor // mongo meta storage
 }
 
-func NewMongoBucketManager(mms *MongoMetaStor) *MongoBucketManager {
+// BucketManager returns MongoBucketManager from this MongoMetaStor
+func (mm *MongoMetaStor) BucketManager() *MongoBucketManager {
 	return &MongoBucketManager{
-		mms: mms,
+		mms: mm,
 	}
 }
 
+// Create implements BucketManager.Create
 func (mbm *MongoBucketManager) Create(bucket string) error {
 	return mbm.mms.createBucket(bucket)
 }
 
+// Get implements BucketManager.Get
 func (mbm *MongoBucketManager) Get(bucket string) (*Bucket, error) {
 	return mbm.mms.getBucket(bucket)
 }
 
+// GetAllBuckets implements BucketManager.GetAllBuckets
 func (mbm *MongoBucketManager) GetAllBuckets() ([]Bucket, error) {
 	return mbm.mms.getAllBuckets()
 }
 
+// Del implements BucketManager.Del
 func (mbm *MongoBucketManager) Del(bucket string) error {
 	return mbm.mms.delBucket(bucket)
 }
 
+// SetPolicy implements BucketManager.SetPolicy
 func (mbm *MongoBucketManager) SetPolicy(bucket string, pol policy.BucketPolicy) error {
 	return mbm.mms.setBucketPolicy(bucket, pol)
 }
@@ -48,12 +55,14 @@ func (mm *MongoMetaStor) createBucket(bucket string) error {
 	ses := mm.getSession()
 	defer ses.Close()
 
-	return mm.getCol(ses).Insert(&mongoEntry{
-		ID:           bucket,
+	id := bucket
+	_, err := mm.getCol(ses).UpsertId(id, &mongoEntry{
+		ID:           id,
 		Parent:       bucketParent,
 		CreatedTime:  time.Now(),
 		BucketPolicy: defaultBucketPolicy,
 	})
+	return err
 }
 
 // getBucket implements BucketManager.Get interface
@@ -109,7 +118,7 @@ func (mm *MongoMetaStor) setBucketPolicy(bucket string, pol policy.BucketPolicy)
 	defer ses.Close()
 
 	return mm.getCol(ses).UpdateId(bucket, bson.M{
-		"$set": bson.M{"policy": pol},
+		"$set": bson.M{"bucket_policy": pol},
 	})
 }
 
