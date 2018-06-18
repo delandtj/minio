@@ -698,11 +698,23 @@ func checkObject(ctx context.Context, t *testing.T, gateway minio.ObjectLayer, b
 }
 
 func newZstorGateway(namespace, bucket string) (minio.ObjectLayer, func(), error) {
+	// creates 0-stor wrapper
 	zstor, cleanupZstor, metaDir, err := newTestZerostor(namespace, bucket)
+	if err != nil {
+		fmt.Println("failed to create test Zerostor:", err.Error())
+		return nil, nil, err
+	}
+
+	// creates multipart manager
+	mpartMgr, err := newMultipartManagerFromCfg(metaCfg{}, metaDir, zstor)
 	if err != nil {
 		return nil, nil, err
 	}
-	gl, err := newGatewayLayerWithZerostor(zstor, metaDir)
+
+	gl, err := newGatewayLayer(zstor, mpartMgr)
+	if err != nil {
+		fmt.Println("newGatewayLayerWithZerostor failed:", err.Error())
+	}
 
 	return gl, cleanupZstor, err
 }

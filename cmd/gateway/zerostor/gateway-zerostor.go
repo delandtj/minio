@@ -140,7 +140,13 @@ func (g *Zerostor) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, e
 		return nil, err
 	}
 
-	zo, err := newGatewayLayerWithZerostor(zstor, g.metaDir)
+	// creates multipart upload manager
+	mpartMgr, err := newMultipartManager(g.confFile, g.metaDir, zstor)
+	if err != nil {
+		return nil, err
+	}
+
+	zo, err := newGatewayLayer(zstor, mpartMgr)
 	if err != nil {
 		return nil, err
 	}
@@ -149,12 +155,7 @@ func (g *Zerostor) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, e
 	return zo, nil
 }
 
-func newGatewayLayerWithZerostor(zstor *zerostor, metaDir string) (*zerostorObjects, error) {
-	// creates multipart upload manager
-	mpartMgr, err := multipart.NewDefaultManager(zstor, metaDir)
-	if err != nil {
-		return nil, err
-	}
+func newGatewayLayer(zstor *zerostor, mpartMgr multipart.Manager) (*zerostorObjects, error) {
 
 	return &zerostorObjects{
 		_zstor:        zstor,
@@ -182,8 +183,8 @@ func (zo *zerostorObjects) handleConfigReload(confFile, metaDir, metaPrivKey str
 
 	go func() {
 		for {
-			log.Println("Got SIGHUP:reload the config")
 			<-sigCh
+			log.Println("Got SIGHUP:reload the config")
 			zo.loadConfig(confFile, metaDir, metaPrivKey)
 		}
 	}()
@@ -198,7 +199,7 @@ func (zo *zerostorObjects) loadConfig(confFile, metaDir, metaPrivKey string) err
 	}
 
 	// creates multipart upload manager
-	mpartMgr, err := multipart.NewDefaultManager(zstor, metaDir)
+	mpartMgr, err := newMultipartManager(confFile, metaDir, zstor)
 	if err != nil {
 		return err
 	}

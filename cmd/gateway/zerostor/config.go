@@ -14,11 +14,14 @@ const (
 // minioZstorCfg defines non 0-stor configuration
 // of minio 0-stor gateway.
 type minioZstorCfg struct {
-	ZerostorMeta zstorMetaCfg `yaml:"zerostor_meta"`
+	Minio struct {
+		ZerostorMeta  metaCfg `yaml:"zerostor_meta"`
+		MultipartMeta metaCfg `yaml:"multipart_meta"`
+	} `yaml:"minio"`
 }
 
-// zstorMetaCfg defines configuration of minio 0-stor gateway metadata
-type zstorMetaCfg struct {
+// metaCfg defines configuration of minio 0-stor gateway metadata
+type metaCfg struct {
 	Type  string       `yaml:"type"`
 	Mongo mongoMetaCfg `yaml:"mongo"`
 }

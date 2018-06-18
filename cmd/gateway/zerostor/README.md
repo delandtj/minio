@@ -79,6 +79,23 @@ datastor: # required
       type: aes # aes is the default and only standard option
       private_key: ab345678901234567890123456789012
 ```
+Above configuration will use local filesystem as metadata.
+To use `mongodb` as metadata, append these config to the end of the above config.
+```yaml
+minio:
+  zerostor_meta:
+    type: mongo
+    mongo:
+      url: localhost:27017
+      database: zstor_meta
+  multipart_meta:
+    type: mongo
+    mongo:
+      url: localhost:27017
+      database: multipart_meta
+```
+Please adjust the `url` and `database` to your environment.
+
 ### Run the gateway
 
 `./minio gateway zerostor`

@@ -238,11 +238,11 @@ func newZstorMeta(confFile, metaDir string) (metaStor meta.Storage, bktMgr meta.
 		return
 	}
 
-	switch cfg.ZerostorMeta.Type {
+	switch cfg.Minio.ZerostorMeta.Type {
 	case metaTypeMongo:
 		var (
 			mongoStor *meta.MongoMetaStor
-			mongoCfg  = cfg.ZerostorMeta.Mongo
+			mongoCfg  = cfg.Minio.ZerostorMeta.Mongo
 		)
 		mongoStor, err = meta.NewMongoMetaStor(mongoCfg.URL, mongoCfg.Database, marshalFnPair)
 		if err != nil {
@@ -250,7 +250,7 @@ func newZstorMeta(confFile, metaDir string) (metaStor meta.Storage, bktMgr meta.
 		}
 		bktMgr = mongoStor.BucketManager()
 		metaStor = mongoStor
-	case metaTypeFile:
+	default:
 		metaStor, err = meta.NewDefaultMetastor(metaDir, marshalFnPair)
 		if err != nil {
 			return
@@ -259,9 +259,6 @@ func newZstorMeta(confFile, metaDir string) (metaStor meta.Storage, bktMgr meta.
 		if err != nil {
 			return
 		}
-	default:
-		err = fmt.Errorf("invalid zerostor meta type:%v", cfg.ZerostorMeta.Type)
-		return
 	}
 	return
 }
