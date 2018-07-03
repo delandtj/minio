@@ -643,96 +643,96 @@
 		{
 			"checksumSHA1": "Cg9IQI8XwnmwRLPgIbmjJ4wP6ko=",
 			"path": "github.com/zero-os/0-stor/client",
-			"revision": "962c48ffa46a2c4525918d31a68a5d53bba2100d",
-			"revisionTime": "2018-04-16T03:34:57Z",
+			"revision": "3e870578ca18a079d93ed5af065cdc1b5453eb41",
+			"revisionTime": "2018-07-03T20:06:32Z",
 			"version": "master",
 			"versionExact": "master"
 		},
 		{
 			"checksumSHA1": "mwmgtw8s6NIVxPppHuPMNOe/1cY=",
 			"path": "github.com/zero-os/0-stor/client/datastor",
-			"revision": "962c48ffa46a2c4525918d31a68a5d53bba2100d",
-			"revisionTime": "2018-04-16T03:34:57Z",
+			"revision": "3e870578ca18a079d93ed5af065cdc1b5453eb41",
+			"revisionTime": "2018-07-03T20:06:32Z",
 			"version": "master",
 			"versionExact": "master"
 		},
 		{
 			"checksumSHA1": "VzDjTkm6L54WPQdG/h9Q4WtjKiY=",
 			"path": "github.com/zero-os/0-stor/client/datastor/pipeline",
-			"revision": "962c48ffa46a2c4525918d31a68a5d53bba2100d",
-			"revisionTime": "2018-04-16T03:34:57Z",
+			"revision": "3e870578ca18a079d93ed5af065cdc1b5453eb41",
+			"revisionTime": "2018-07-03T20:06:32Z",
 			"version": "master",
 			"versionExact": "master"
 		},
 		{
 			"checksumSHA1": "+bmdzCEQXdUQvmm1q/FOdpYEYZg=",
 			"path": "github.com/zero-os/0-stor/client/datastor/pipeline/crypto",
-			"revision": "962c48ffa46a2c4525918d31a68a5d53bba2100d",
-			"revisionTime": "2018-04-16T03:34:57Z",
+			"revision": "3e870578ca18a079d93ed5af065cdc1b5453eb41",
+			"revisionTime": "2018-07-03T20:06:32Z",
 			"version": "master",
 			"versionExact": "master"
 		},
 		{
 			"checksumSHA1": "A+MJ2BkjJqHFultIed6n8XOkAeo=",
 			"path": "github.com/zero-os/0-stor/client/datastor/pipeline/storage",
-			"revision": "962c48ffa46a2c4525918d31a68a5d53bba2100d",
-			"revisionTime": "2018-04-16T03:34:57Z",
+			"revision": "3e870578ca18a079d93ed5af065cdc1b5453eb41",
+			"revisionTime": "2018-07-03T20:06:32Z",
 			"version": "master",
 			"versionExact": "master"
 		},
 		{
-			"checksumSHA1": "KRFF1SsQK83CVA2UOrs2vJatHB4=",
+			"checksumSHA1": "2iazbOC6V+VTTgwwFiKrMp14d/A=",
 			"path": "github.com/zero-os/0-stor/client/datastor/zerodb",
-			"revision": "962c48ffa46a2c4525918d31a68a5d53bba2100d",
-			"revisionTime": "2018-04-16T03:34:57Z",
+			"revision": "3e870578ca18a079d93ed5af065cdc1b5453eb41",
+			"revisionTime": "2018-07-03T20:06:32Z",
 			"version": "master",
 			"versionExact": "master"
 		},
 		{
 			"checksumSHA1": "e8e1OJyJm89tBfoS9q4Lk1HCZGo=",
 			"path": "github.com/zero-os/0-stor/client/metastor",
-			"revision": "962c48ffa46a2c4525918d31a68a5d53bba2100d",
-			"revisionTime": "2018-04-16T03:34:57Z",
+			"revision": "3e870578ca18a079d93ed5af065cdc1b5453eb41",
+			"revisionTime": "2018-07-03T20:06:32Z",
 			"version": "master",
 			"versionExact": "master"
 		},
 		{
 			"checksumSHA1": "F6HIHtWexEW+qbyauBPCqN3lKAk=",
 			"path": "github.com/zero-os/0-stor/client/metastor/db",
-			"revision": "962c48ffa46a2c4525918d31a68a5d53bba2100d",
-			"revisionTime": "2018-04-16T03:34:57Z",
+			"revision": "3e870578ca18a079d93ed5af065cdc1b5453eb41",
+			"revisionTime": "2018-07-03T20:06:32Z",
 			"version": "master",
 			"versionExact": "master"
 		},
 		{
 			"checksumSHA1": "bn5Hj4N9ne17Lb0oYC/6laB4yds=",
 			"path": "github.com/zero-os/0-stor/client/metastor/encoding",
-			"revision": "962c48ffa46a2c4525918d31a68a5d53bba2100d",
-			"revisionTime": "2018-04-16T03:34:57Z",
+			"revision": "3e870578ca18a079d93ed5af065cdc1b5453eb41",
+			"revisionTime": "2018-07-03T20:06:32Z",
 			"version": "master",
 			"versionExact": "master"
 		},
 		{
 			"checksumSHA1": "ULvYdBaDMjDC4/GaABg81bKS1aQ=",
 			"path": "github.com/zero-os/0-stor/client/metastor/encoding/proto",
-			"revision": "962c48ffa46a2c4525918d31a68a5d53bba2100d",
-			"revisionTime": "2018-04-16T03:34:57Z",
+			"revision": "3e870578ca18a079d93ed5af065cdc1b5453eb41",
+			"revisionTime": "2018-07-03T20:06:32Z",
 			"version": "master",
 			"versionExact": "master"
 		},
 		{
 			"checksumSHA1": "mgp/k6OCRn6fGGc2k5xm6yAsK1Q=",
 			"path": "github.com/zero-os/0-stor/client/metastor/metatypes",
-			"revision": "962c48ffa46a2c4525918d31a68a5d53bba2100d",
-			"revisionTime": "2018-04-16T03:34:57Z",
+			"revision": "3e870578ca18a079d93ed5af065cdc1b5453eb41",
+			"revisionTime": "2018-07-03T20:06:32Z",
 			"version": "master",
 			"versionExact": "master"
 		},
 		{
 			"checksumSHA1": "juOiRCtH1gNFjoTCwBJqxNDyXAA=",
 			"path": "github.com/zero-os/0-stor/client/processing",
-			"revision": "962c48ffa46a2c4525918d31a68a5d53bba2100d",
-			"revisionTime": "2018-04-16T03:34:57Z",
+			"revision": "3e870578ca18a079d93ed5af065cdc1b5453eb41",
+			"revisionTime": "2018-07-03T20:06:32Z",
 			"version": "master",
 			"versionExact": "master"
 		},
