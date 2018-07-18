@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	minio "github.com/minio/minio/cmd"
-	"github.com/zero-os/0-stor/client/datastor"
+	"github.com/zero-os/0-stor/client/metastor"
 )
 
 func TestManagerComplete(t *testing.T) {
@@ -20,9 +20,8 @@ func TestManagerComplete(t *testing.T) {
 		key1     = "Key1"
 		val1     = "val1"
 	)
-	stor := newStorTest()
 
-	mgr, metaMgr, cleanup := newDefaultUploadMgr(t, stor)
+	mgr, _, stor, cleanup := newTestUploadMgr(t)
 	defer cleanup()
 
 	// Init multipart upload
@@ -67,14 +66,11 @@ func TestManagerComplete(t *testing.T) {
 		}
 	}
 
-	// all parts that should be deleted
-	_, deletedParts, err := metaMgr.GetMultipart(bucket, uploadID)
-	if err != nil {
-		t.Fatalf("failed to list part :%v", err)
-	}
-
 	// `Complete` Part
 	_, err = mgr.Complete(bucket, object, uploadID, toCompleteParts)
+	if err != nil {
+		t.Fatalf("Complete failed:%v", err)
+	}
 
 	// verify data uploaded
 	uploadedBuf := bytes.NewBuffer(nil)
@@ -86,15 +82,6 @@ func TestManagerComplete(t *testing.T) {
 	if bytes.Compare(data, uploadedBuf.Bytes()) != 0 {
 		t.Fatalf("uploaded buf is not valid")
 	}
-
-	// verify all data parts are deleted
-	for _, part := range deletedParts {
-		buf := bytes.NewBuffer(nil)
-		err = stor.Read(MultipartBucket, part.Object, buf)
-		if err != datastor.ErrKeyNotFound {
-			t.Fatalf("part `%v` still exist", part.PartNumber)
-		}
-	}
 }
 
 func TestManagerAbort(t *testing.T) {
@@ -104,9 +91,8 @@ func TestManagerAbort(t *testing.T) {
 		dataLen  = 1000
 		partSize = 100
 	)
-	stor := newStorTest()
 
-	mgr, metaMgr, cleanup := newDefaultUploadMgr(t, stor)
+	mgr, metaMgr, stor, cleanup := newTestUploadMgr(t)
 	defer cleanup()
 
 	// init
@@ -144,8 +130,8 @@ func TestManagerAbort(t *testing.T) {
 	for _, part := range parts {
 		buf := bytes.NewBuffer(nil)
 		err = stor.Read(MultipartBucket, part.Object, buf)
-		if err != datastor.ErrKeyNotFound {
-			t.Fatalf("part `%v` still exist", part.PartNumber)
+		if err != metastor.ErrNotFound {
+			t.Fatalf("part `%v` still exist, err: %v", part.PartNumber, err)
 		}
 	}
 
@@ -167,9 +153,8 @@ func TestManagerListPart(t *testing.T) {
 		dataLen  = 1000
 		partSize = 100
 	)
-	stor := newStorTest()
 
-	mgr, _, cleanup := newDefaultUploadMgr(t, stor)
+	mgr, _, _, cleanup := newTestUploadMgr(t)
 	defer cleanup()
 
 	// init
@@ -242,9 +227,8 @@ func TestManagerListUpload(t *testing.T) {
 		partSize  = 100
 		numUpload = 10
 	)
-	stor := newStorTest()
 
-	mgr, _, cleanup := newDefaultUploadMgr(t, stor)
+	mgr, _, _, cleanup := newTestUploadMgr(t)
 	defer cleanup()
 
 	var (
@@ -289,14 +273,17 @@ func TestManagerListUpload(t *testing.T) {
 	}
 }
 
-func newDefaultUploadMgr(t *testing.T, stor Storage) (Manager, MetaManager, func()) {
-	metaMgr, cleanupMeta := newTestFilemetaUploadMgr(t)
+func newTestUploadMgr(t *testing.T) (Manager, MetaManager, Storage, func()) {
+	uploadMetaMgr, metaStor, cleanupMeta := newTestFilemetaUploadMgr(t)
 
-	mgr := NewManager(stor, metaMgr)
+	stor, storCleanup := newTestZstorClient(t, metaStor)
+
+	mgr := NewManager(stor, uploadMetaMgr)
 
 	cleanup := func() {
 		mgr.Close()
+		storCleanup()
 		cleanupMeta()
 	}
-	return mgr, metaMgr, cleanup
+	return mgr, uploadMetaMgr, stor, cleanup
 }

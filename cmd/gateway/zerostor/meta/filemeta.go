@@ -157,6 +157,10 @@ func (fm *filemeta) GetDecodeMeta(key []byte) (*metatypes.Metadata, error) {
 	return &md, err
 }
 
+func (fm *filemeta) Encode(md metatypes.Metadata) ([]byte, error) {
+	return fm.encodeFunc(md)
+}
+
 func (fm *filemeta) Close() error {
 	return nil
 }

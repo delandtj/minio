@@ -97,7 +97,7 @@ func TestGatewayObjectRoundTrip(t *testing.T) {
 		object    = "object"
 		dataLen   = 4096
 	)
-	zo, cleanup, err := newZstorGateway(namespace, bucket)
+	zo, cleanup, err := newZstorGateway(t, namespace, bucket)
 	if err != nil {
 		t.Fatalf("failed to create gateway:%v", err)
 	}
@@ -187,7 +187,7 @@ func TestGatewayListObject(t *testing.T) {
 		dataLen   = 4096
 		numObject = 10
 	)
-	zo, cleanup, err := newZstorGateway(namespace, bucket)
+	zo, cleanup, err := newZstorGateway(t, namespace, bucket)
 	if err != nil {
 		t.Fatalf("failed to create gateway:%v", err)
 	}
@@ -242,7 +242,7 @@ func TestDeleteNotExistObject(t *testing.T) {
 		object    = "object"
 		dataLen   = 4096
 	)
-	zo, cleanup, err := newZstorGateway(namespace, bucket)
+	zo, cleanup, err := newZstorGateway(t, namespace, bucket)
 	if err != nil {
 		t.Fatalf("failed to create gateway:%v", err)
 	}
@@ -272,7 +272,7 @@ func TestGatewayBucketRoundTrip(t *testing.T) {
 		buckets = []string{"bkt_1", "bkt_2", "bkt_3"}
 	)
 
-	zo, cleanup, err := newZstorGateway(namespace, buckets[0])
+	zo, cleanup, err := newZstorGateway(t, namespace, buckets[0])
 	if err != nil {
 		t.Fatalf("failed to create gateway:%v", err)
 	}
@@ -332,7 +332,7 @@ func TestGatewayBucketPolicy(t *testing.T) {
 		bucket    = "bucket"
 	)
 
-	zo, cleanup, err := newZstorGateway(namespace, bucket)
+	zo, cleanup, err := newZstorGateway(t, namespace, bucket)
 	if err != nil {
 		t.Fatalf("failed to create gateway:%v", err)
 	}
@@ -407,7 +407,7 @@ func TestMultipartUploadComplete(t *testing.T) {
 		numPart   = 100
 	)
 
-	zo, cleanup, err := newZstorGateway(namespace, bucket)
+	zo, cleanup, err := newZstorGateway(t, namespace, bucket)
 	if err != nil {
 		t.Fatalf("failed to create gateway:%v", err)
 	}
@@ -479,7 +479,7 @@ func TestMultipartUploadListAbort(t *testing.T) {
 		numUploads = 10
 	)
 
-	zo, cleanup, err := newZstorGateway(namespace, bucket)
+	zo, cleanup, err := newZstorGateway(t, namespace, bucket)
 	if err != nil {
 		t.Fatalf("failed to create gateway:%v", err)
 	}
@@ -602,7 +602,7 @@ func TestMultipartUploadCopyComplete(t *testing.T) {
 		numPart   = 100
 	)
 
-	zo, cleanup, err := newZstorGateway(namespace, bucket)
+	zo, cleanup, err := newZstorGateway(t, namespace, bucket)
 	if err != nil {
 		t.Fatalf("failed to create gateway:%v", err)
 	}
@@ -682,6 +682,9 @@ func checkObject(ctx context.Context, t *testing.T, gateway minio.ObjectLayer, b
 	if info.Name != object {
 		t.Fatalf("invalid object name: %v, expected: %v", info.Name, object)
 	}
+	if int(info.Size) != len(expected) {
+		t.Fatalf("invalid object info size: %v, expected: %v", info.Size, len(expected))
+	}
 
 	// check object content
 	err = gateway.GetObject(ctx, bucket, object, 0, int64(len(expected)), buf, "")
@@ -697,16 +700,12 @@ func checkObject(ctx context.Context, t *testing.T, gateway minio.ObjectLayer, b
 
 }
 
-func newZstorGateway(namespace, bucket string) (minio.ObjectLayer, func(), error) {
+func newZstorGateway(t *testing.T, namespace, bucket string) (minio.ObjectLayer, func(), error) {
 	// creates 0-stor wrapper
-	zstor, cleanupZstor, metaDir, err := newTestZerostor(namespace, bucket)
-	if err != nil {
-		fmt.Println("failed to create test Zerostor:", err.Error())
-		return nil, nil, err
-	}
+	zstor, metaStor, cleanupZstor, metaDir := newTestZerostor(t, namespace, bucket)
 
 	// creates multipart manager
-	mpartMgr, err := newMultipartManagerFromCfg(metaCfg{}, metaDir, zstor)
+	mpartMgr, err := newMultipartManagerFromCfg(metaCfg{}, metaDir, zstor, metaStor)
 	if err != nil {
 		return nil, nil, err
 	}

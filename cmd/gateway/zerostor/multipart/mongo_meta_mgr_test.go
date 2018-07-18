@@ -18,8 +18,8 @@ func TestMongoMetaListUploads(t *testing.T) {
 	testMetaListUploads(t, mm)
 }
 
-func newTestMongoMetaMgr(t *testing.T) (*mongoMetaMgr, func()) {
-	mm, err := NewMongoMetaMgr("localhost:27017", "minio_multipart")
+func newTestMongoMetaMgr(t *testing.T) (*MongoMetaMgr, func()) {
+	mm, err := NewMongoMetaMgr("localhost:27017", "minio_multipart", nil)
 	if err != nil {
 		t.Fatalf("failed to create mongo meta manager: %v", err)
 	}

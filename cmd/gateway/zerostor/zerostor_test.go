@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"testing"
 
+	"github.com/minio/minio/cmd/gateway/zerostor/meta"
 	"github.com/zero-os/0-stor/client/metastor/db"
 )
 
@@ -21,15 +22,12 @@ func TestZerostorRoundTrip(t *testing.T) {
 	)
 	rand.Read(data)
 
-	zstor, cleanup, _, err := newTestZerostor(namespace, bucket)
-	if err != nil {
-		t.Fatalf("failed to create test zerostor: %v", err)
-	}
+	zstor, _, cleanup, _ := newTestZerostor(t, namespace, bucket)
 	defer cleanup()
 
 	// make sure the object is not exist yet
 	buf := bytes.NewBuffer(nil)
-	err = zstor.ReadRange(bucket, object, buf, 0, dataLen)
+	err := zstor.ReadRange(bucket, object, buf, 0, dataLen)
 	if err != db.ErrNotFound {
 		t.Fatalf("expect error: %v, got: %v", db.ErrNotFound, err)
 	}
@@ -100,20 +98,17 @@ func TestParseNsInfo(t *testing.T) {
 		})
 	}
 }
-func newTestZerostor(namespace, bucket string) (*zerostor, func(), string, error) {
-	zstorCli, metaStor, bktMgr, cleanup, metaDir, err := newTestInMemZstorClient(namespace)
-	if err != nil {
-		return nil, nil, "", err
-	}
+func newTestZerostor(t *testing.T, namespace, bucket string) (*zerostor, meta.Storage, func(), string) {
+	zstorCli, metaStor, bktMgr, cleanup, metaDir := newTestInMemZstorClient(t, namespace)
 
-	err = bktMgr.Create(bucket)
+	err := bktMgr.Create(bucket)
 	if err != nil {
-		return nil, nil, "", err
+		t.Fatalf("failed to create bucket manager: %v", err)
 	}
 
 	return &zerostor{
 		bktMgr:   bktMgr,
 		metaStor: metaStor,
 		storCli:  zstorCli,
-	}, cleanup, metaDir, nil
+	}, metaStor, cleanup, metaDir
 }

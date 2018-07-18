@@ -159,6 +159,11 @@ func (mm *MongoMetaStor) GetDecodeMeta(key []byte) (*metatypes.Metadata, error) 
 	return &md, err
 }
 
+// Encode implements Storage.Encode
+func (mm *MongoMetaStor) Encode(md metatypes.Metadata) ([]byte, error) {
+	return mm.encodeFn(md)
+}
+
 // ListObjects implements Storage.ListObjects
 func (mm *MongoMetaStor) ListObjects(bucket, prefix, marker, delimiter string,
 	maxKeys int) (minio.ListObjectsInfo, error) {

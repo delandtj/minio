@@ -1,83 +1,102 @@
 package multipart
 
 import (
-	"bytes"
 	"io"
-	"io/ioutil"
-	"sync"
-	"time"
+	"path"
+	"testing"
 
-	"github.com/zero-os/0-stor/client/datastor"
+	"github.com/zero-os/0-stor/client"
+	zdbtest "github.com/zero-os/0-stor/client/datastor/zerodb/test"
+	"github.com/zero-os/0-stor/client/metastor"
+	"github.com/zero-os/0-stor/client/metastor/db"
 	"github.com/zero-os/0-stor/client/metastor/metatypes"
 )
 
-// storTest provide simple in memory storage.
-// implemented using Go map
-type storTest struct {
-	mux sync.Mutex
-	kv  map[string][]byte
+type testZstorClient struct {
+	zstorCli *client.Client
+	metaCli  *metastor.Client
 }
 
-func newStorTest() *storTest {
-	return &storTest{
-		kv: make(map[string][]byte),
+func newTestZstorClient(t *testing.T, metaDB db.DB) (*testZstorClient, func()) {
+	const (
+		namespace = "namespace1"
+	)
+	// creates in-memory 0-db server
+	shards, serverClean := testZdbServer(t, 4)
+
+	// creates 0-stor client config
+	cfg := client.Config{
+		Namespace: namespace,
+		DataStor:  client.DataStorConfig{Shards: shards},
 	}
-}
+	cfg.DataStor.Pipeline.BlockSize = 64
 
-func (st *storTest) Write(bucket, object string, rd io.Reader, metadata map[string]string) (*metatypes.Metadata, error) {
-
-	data, err := ioutil.ReadAll(rd)
+	// creates 0-stor metastor client
+	zMetaStorCli, err := metastor.NewClient(namespace, metaDB, "")
 	if err != nil {
-		return nil, err
+		t.Fatalf("failed to creates 0-stor metastor client:%v", err)
 	}
 
-	key := st.key(bucket, object)
-
-	st.mux.Lock()
-	defer st.mux.Unlock()
-
-	st.kv[key] = data
-
-	now := time.Now().UnixNano()
-	dataSize := int64(len(data))
-	return &metatypes.Metadata{
-		Key:            []byte(key),
-		Size:           dataSize,
-		StorageSize:    dataSize,
-		CreationEpoch:  now,
-		LastWriteEpoch: now,
-	}, nil
-}
-
-func (st *storTest) Read(bucket, object string, writer io.Writer) error {
-	key := st.key(bucket, object)
-
-	st.mux.Lock()
-	defer st.mux.Unlock()
-
-	data, ok := st.kv[key]
-	if !ok {
-		return datastor.ErrKeyNotFound
+	// creates metadata storage
+	client, err := client.NewClientFromConfig(cfg, zMetaStorCli, 0)
+	if err != nil {
+		t.Fatalf("failed to creates 0-stor client:%v", err)
 	}
 
-	_, err := io.Copy(writer, bytes.NewReader(data))
-	return err
-}
-
-func (st *storTest) Delete(bucket, object string) error {
-	key := st.key(bucket, object)
-
-	st.mux.Lock()
-	defer st.mux.Unlock()
-
-	_, ok := st.kv[key]
-	if !ok {
-		return datastor.ErrKeyNotFound
+	tz := testZstorClient{
+		zstorCli: client,
+		metaCli:  zMetaStorCli,
 	}
-	delete(st.kv, key)
-	return nil
+
+	return &tz, func() {
+		client.Close()
+		serverClean()
+	}
 }
 
-func (st *storTest) key(bucket, object string) string {
-	return bucket + ":" + object
+func (tz *testZstorClient) Write(bucket, object string, r io.Reader, userDef map[string]string) (*metatypes.Metadata, error) {
+	return tz.zstorCli.Write(tz.getKey(bucket, object), r)
+}
+func (tz *testZstorClient) Read(bucket, object string, w io.Writer) error {
+	md, err := tz.metaCli.GetMetadata(tz.getKey(bucket, object))
+	if err != nil {
+		return err
+	}
+	return tz.zstorCli.Read(*md, w)
+}
+
+func (tz *testZstorClient) Delete(bucket, object string) error {
+	md, err := tz.metaCli.GetMetadata(tz.getKey(bucket, object))
+	if err != nil {
+		return err
+	}
+	return tz.zstorCli.Delete(*md)
+}
+
+func (tz *testZstorClient) getKey(bucket, object string) []byte {
+	return []byte(path.Join(bucket, object))
+}
+
+func testZdbServer(t *testing.T, n int) (shards []string, cleanups func()) {
+	var (
+		namespace    = "ns"
+		cleanupFuncs []func()
+	)
+
+	for i := 0; i < n; i++ {
+		addr, cleanup, err := zdbtest.NewInMem0DBServer(namespace)
+		if err != nil {
+			t.Fatalf("failed to create zdb server:%v", err)
+		}
+
+		cleanupFuncs = append(cleanupFuncs, cleanup)
+		shards = append(shards, addr)
+	}
+
+	cleanups = func() {
+		for _, cleanup := range cleanupFuncs {
+			cleanup()
+		}
+	}
+	return
 }

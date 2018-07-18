@@ -61,14 +61,16 @@ func (m *manager) UploadPart(bucket, object, uploadID, etag string, partID int, 
 
 	// meta part info
 	metaInfo := PartInfo{
-		Object:   partObject,
-		PartInfo: info,
+		Object:    partObject,
+		PartInfo:  info,
+		ZstorMeta: *md,
 	}
 	err = m.metaMgr.AddPart(bucket, uploadID, partID, metaInfo)
 	return
 }
 
-// Complete implements Manager.Complete
+// Complete implements Manager.Complete.
+// The 'Complete' is done by merging metadatas of the uploaded parts.
 func (m *manager) Complete(bucket, object, uploadID string, parts []minio.CompletePart) (*metatypes.Metadata, error) {
 	// get all  part info of this upload ID
 	multipartInfo, storedPartInfos, err := m.getStoredInfo(bucket, uploadID)
@@ -76,55 +78,44 @@ func (m *manager) Complete(bucket, object, uploadID string, parts []minio.Comple
 		return nil, err
 	}
 
-	var (
-		// pipe to connect `reader` that download from temporary
-		// storage to `writer` that upload to permanent storage
-		storRd, storWr = io.Pipe()
-		errCh          = make(chan error, 1)
-	)
-
-	// read the data one by one and stream it to the writer
-	go func() {
-		defer storWr.Close()
-
-		for _, part := range parts {
-			info, ok := storedPartInfos[part.ETag]
-			if !ok {
-				errCh <- minio.InvalidPart{}
-				return
-			}
-
-			// get data
-			if err = m.stor.Read(MultipartBucket, info.Object, storWr); err != nil {
-				errCh <- err
-				return
-			}
-
-			// delete the temporary object
-			if err = m.stor.Delete(MultipartBucket, info.Object); err != nil {
-				// we don't return error here because we don't return error
-				// on failed deletion.
-				// Other tool should do garbage storage cleanup
-				continue
-			}
-			delete(storedPartInfos, part.ETag)
-
-			// we don't check the error here because
-			// we want to keep delete next part.
-			// another tools should do metadata cleanup
-			m.metaMgr.DelPart(bucket, uploadID, part.ETag, part.PartNumber)
-		}
-		errCh <- nil
-	}()
-
-	// write from the pipe
-	md, err := m.stor.Write(bucket, object, storRd, multipartInfo.Metadata)
-	if err != nil {
-		return nil, err
+	// creates new meta
+	newMd := metatypes.Metadata{
+		Key:         []byte(path.Join(bucket, object)),
+		UserDefined: multipartInfo.Metadata,
 	}
 
-	// check error from the reader
-	err = <-errCh
+	// get the meta of all parts and append it
+	for _, part := range parts {
+		info, ok := storedPartInfos[part.ETag]
+		if !ok {
+			return nil, minio.InvalidPart{}
+		}
+
+		// append the meta
+		md := info.ZstorMeta
+		newMd.Namespace = md.Namespace
+		newMd.Size += md.Size
+		newMd.StorageSize += md.StorageSize
+		newMd.CreationEpoch = md.CreationEpoch
+		newMd.LastWriteEpoch = md.LastWriteEpoch
+		newMd.Chunks = append(newMd.Chunks, md.Chunks...)
+		newMd.ChunkSize = md.ChunkSize
+
+		for k, v := range md.UserDefined {
+			newMd.UserDefined[k] = v
+		}
+
+		// clean this part
+		delete(storedPartInfos, part.ETag)
+
+		// we don't check the error here because
+		// we still want to delete the next parts.
+		// another tools should do metadata cleanup
+		m.metaMgr.DelPart(bucket, uploadID, part.ETag, part.PartNumber)
+	}
+
+	// merge the metadata
+	err = m.metaMgr.SetZstorMeta(newMd)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +135,7 @@ func (m *manager) Complete(bucket, object, uploadID string, parts []minio.Comple
 	}
 
 	// clean metadata
-	return md, m.metaMgr.Clean(bucket, uploadID)
+	return &newMd, m.metaMgr.Clean(bucket, uploadID)
 }
 
 // Abort implements Manager.Abort

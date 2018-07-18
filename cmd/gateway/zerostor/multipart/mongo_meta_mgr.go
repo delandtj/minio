@@ -6,11 +6,15 @@ import (
 	"github.com/globalsign/mgo"
 	"github.com/globalsign/mgo/bson"
 	minio "github.com/minio/minio/cmd"
+	"github.com/minio/minio/cmd/gateway/zerostor/meta"
+	"github.com/zero-os/0-stor/client/metastor/metatypes"
 )
 
-type mongoMetaMgr struct {
-	ses    *mgo.Session // mongodb main session
-	dbName string       // mongodb DB name
+// MongoMetaMgr defines upload metadata manager backed by mongodb.
+type MongoMetaMgr struct {
+	ses      *mgo.Session // mongodb main session
+	dbName   string       // mongodb DB name
+	metaStor meta.Storage
 }
 
 type mongoMetaEntry struct {
@@ -20,19 +24,21 @@ type mongoMetaEntry struct {
 }
 
 // NewMongoMetaMgr creates meta manager with mongodb backend
-func NewMongoMetaMgr(url, dbName string) (*mongoMetaMgr, error) {
+func NewMongoMetaMgr(url, dbName string, metaStor meta.Storage) (*MongoMetaMgr, error) {
 	ses, err := mgo.Dial(url)
 	if err != nil {
 		return nil, err
 	}
 
-	return &mongoMetaMgr{
-		ses:    ses,
-		dbName: dbName,
+	return &MongoMetaMgr{
+		ses:      ses,
+		dbName:   dbName,
+		metaStor: metaStor,
 	}, nil
 }
 
-func (mmm *mongoMetaMgr) Init(bucket, object string, metadata map[string]string) (Info, error) {
+// Init implements MetaManager.Init
+func (mmm *MongoMetaMgr) Init(bucket, object string, metadata map[string]string) (Info, error) {
 	uploadID := bson.NewObjectId().Hex()
 	info := Info{
 		MultipartInfo: minio.MultipartInfo{
@@ -63,7 +69,8 @@ type mongoPartInfo struct {
 	Info     PartInfo `bson:"info"`
 }
 
-func (mmm *mongoMetaMgr) AddPart(bucket, uploadID string, partID int, info PartInfo) error {
+// AddPart implements MetaManager.AddPart
+func (mmm *MongoMetaMgr) AddPart(bucket, uploadID string, partID int, info PartInfo) error {
 	ses, col := mmm.getSesColPart()
 	defer ses.Close()
 
@@ -76,7 +83,8 @@ func (mmm *mongoMetaMgr) AddPart(bucket, uploadID string, partID int, info PartI
 	})
 }
 
-func (mmm *mongoMetaMgr) DelPart(bucket, uploadID string, etag string, partID int) error {
+// DelPart implements MetaManager.DelPart
+func (mmm *MongoMetaMgr) DelPart(bucket, uploadID string, etag string, partID int) error {
 	ses, col := mmm.getSesColPart()
 	defer ses.Close()
 
@@ -87,7 +95,8 @@ func (mmm *mongoMetaMgr) DelPart(bucket, uploadID string, etag string, partID in
 	})
 }
 
-func (mmm *mongoMetaMgr) ListUpload(bucket string) ([]Info, error) {
+// ListUpload implements MetaManager.ListUpload
+func (mmm *MongoMetaMgr) ListUpload(bucket string) ([]Info, error) {
 	ses, col := mmm.getSesColUpload()
 	defer ses.Close()
 
@@ -108,7 +117,17 @@ func (mmm *mongoMetaMgr) ListUpload(bucket string) ([]Info, error) {
 	return infos, nil
 }
 
-func (mmm *mongoMetaMgr) GetMultipart(bucket, uploadID string) (Info, []PartInfo, error) {
+// SetZstorMeta implements MetaManager.SetZstorMeta
+func (mmm *MongoMetaMgr) SetZstorMeta(md metatypes.Metadata) error {
+	rawMd, err := mmm.metaStor.Encode(md)
+	if err != nil {
+		return err
+	}
+	return mmm.metaStor.Set(md.Namespace, md.Key, rawMd)
+}
+
+// GetMultipart implements MetaManager.GetMultipart
+func (mmm *MongoMetaMgr) GetMultipart(bucket, uploadID string) (Info, []PartInfo, error) {
 	ses := mmm.getSes()
 	defer ses.Close()
 
@@ -144,7 +163,8 @@ func (mmm *mongoMetaMgr) GetMultipart(bucket, uploadID string) (Info, []PartInfo
 	return info, parts, nil
 }
 
-func (mmm *mongoMetaMgr) Clean(bucket, uploadID string) error {
+// Clean implements MetaManager.Clean
+func (mmm *MongoMetaMgr) Clean(bucket, uploadID string) error {
 	ses := mmm.getSes()
 	defer ses.Close()
 
@@ -164,27 +184,27 @@ func (mmm *mongoMetaMgr) Clean(bucket, uploadID string) error {
 	return err
 }
 
-func (mmm *mongoMetaMgr) getSes() *mgo.Session {
+func (mmm *MongoMetaMgr) getSes() *mgo.Session {
 	return mmm.ses.Copy()
 }
 
-func (mmm *mongoMetaMgr) getCol(ses *mgo.Session, colName string) *mgo.Collection {
+func (mmm *MongoMetaMgr) getCol(ses *mgo.Session, colName string) *mgo.Collection {
 	return ses.DB(mmm.dbName).C(colName)
 }
 
-func (mmm *mongoMetaMgr) getSesColUpload() (*mgo.Session, *mgo.Collection) {
+func (mmm *MongoMetaMgr) getSesColUpload() (*mgo.Session, *mgo.Collection) {
 	ses := mmm.getSes()
 	col := mmm.getCol(ses, mongoUploadCol)
 	return ses, col
 }
 
-func (mmm *mongoMetaMgr) getSesColPart() (*mgo.Session, *mgo.Collection) {
+func (mmm *MongoMetaMgr) getSesColPart() (*mgo.Session, *mgo.Collection) {
 	ses := mmm.getSes()
 	col := mmm.getCol(ses, mongoPartCol)
 	return ses, col
 }
 
-func (mmm *mongoMetaMgr) dropDB() {
+func (mmm *MongoMetaMgr) dropDB() {
 	mmm.ses.DB(mmm.dbName).DropDatabase()
 }
 
@@ -194,5 +214,5 @@ const (
 )
 
 var (
-	_ MetaManager = (*mongoMetaMgr)(nil)
+	_ MetaManager = (*MongoMetaMgr)(nil)
 )

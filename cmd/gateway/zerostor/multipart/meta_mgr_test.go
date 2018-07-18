@@ -22,7 +22,7 @@ func testMetaRoundTrip(t *testing.T, mm MetaManager) {
 		key1: val1,
 	}
 
-	mm, cleanup := newTestFilemetaUploadMgr(t)
+	mm, _, cleanup := newTestFilemetaUploadMgr(t)
 	defer cleanup()
 
 	// init

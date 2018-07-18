@@ -141,7 +141,7 @@ func (g *Zerostor) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, e
 	}
 
 	// creates multipart upload manager
-	mpartMgr, err := newMultipartManager(g.confFile, g.metaDir, zstor)
+	mpartMgr, err := newMultipartManager(g.confFile, g.metaDir, zstor, zstor.metaStor)
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +199,7 @@ func (zo *zerostorObjects) loadConfig(confFile, metaDir, metaPrivKey string) err
 	}
 
 	// creates multipart upload manager
-	mpartMgr, err := newMultipartManager(confFile, metaDir, zstor)
+	mpartMgr, err := newMultipartManager(confFile, metaDir, zstor, zstor.metaStor)
 	if err != nil {
 		return err
 	}

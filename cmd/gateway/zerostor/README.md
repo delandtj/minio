@@ -5,7 +5,9 @@ as storage server.
 
 ## Metadata
 
-This gateway use local filesystem as metadata, the directory of the metadata
+This gateway has two kind of metadata : mongodb and local filesystem.
+
+When using local filesystem as metadata, the directory of the metadata
 location is specified in `MINIO_ZEROSTOR_META_DIR` environment variable.
 
 0-stor provide metadata using `ETCD` and `Badger`, but this gateway doesn't use them because they

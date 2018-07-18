@@ -107,6 +107,9 @@ func (zc *zerostor) ReadRange(bucket, object string, writer io.Writer, offset, l
 	if err != nil {
 		return err
 	}
+	if offset == 0 && length == md.Size {
+		return zc.storCli.Read(*md, writer)
+	}
 	return zc.storCli.ReadRange(*md, writer, offset, length)
 }
 

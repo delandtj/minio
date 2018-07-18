@@ -11,6 +11,8 @@ import (
 	"time"
 
 	minio "github.com/minio/minio/cmd"
+	"github.com/minio/minio/cmd/gateway/zerostor/meta"
+	"github.com/zero-os/0-stor/client/metastor/metatypes"
 )
 
 const (
@@ -26,10 +28,11 @@ var (
 // filemetaUploadMgr defines filebased metadata manager that implements
 // MetaManager interface
 type filemetaUploadMgr struct {
-	rootDir string
+	rootDir  string
+	metaStor meta.Storage
 }
 
-func newFilemetaUploadMgr(metaDir string) (*filemetaUploadMgr, error) {
+func newFilemetaUploadMgr(metaDir string, metaStor meta.Storage) (*filemetaUploadMgr, error) {
 	rootDir := filepath.Join(metaDir, "multipart")
 
 	if err := os.MkdirAll(rootDir, dirPerm); err != nil {
@@ -37,7 +40,8 @@ func newFilemetaUploadMgr(metaDir string) (*filemetaUploadMgr, error) {
 	}
 
 	return &filemetaUploadMgr{
-		rootDir: rootDir,
+		rootDir:  rootDir,
+		metaStor: metaStor,
 	}, nil
 }
 
@@ -123,6 +127,14 @@ func (fu *filemetaUploadMgr) ListUpload(bucket string) ([]Info, error) {
 	})
 
 	return uploads, nil
+}
+
+func (fu *filemetaUploadMgr) SetZstorMeta(md metatypes.Metadata) error {
+	rawMd, err := fu.metaStor.Encode(md)
+	if err != nil {
+		return err
+	}
+	return fu.metaStor.Set(md.Namespace, md.Key, rawMd)
 }
 
 // GetMultipart implements MetaManager.ListPart

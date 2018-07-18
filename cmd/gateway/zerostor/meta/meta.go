@@ -29,6 +29,8 @@ type Storage interface {
 	// See https://docs.aws.amazon.com/AmazonS3/latest/API/RESTBucketGET.html
 	// for the details
 	ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result minio.ListObjectsInfo, err error)
+
+	Encode(md metatypes.Metadata) ([]byte, error)
 }
 
 // BucketManager defines interface that manages

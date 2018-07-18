@@ -9,17 +9,19 @@ import (
 	"time"
 
 	minio "github.com/minio/minio/cmd"
+	"github.com/minio/minio/cmd/gateway/zerostor/meta"
+	"github.com/zero-os/0-stor/client/metastor/encoding"
 )
 
 func TestFileMetaRoundTrip(t *testing.T) {
-	mm, cleanup := newTestFilemetaUploadMgr(t)
+	mm, _, cleanup := newTestFilemetaUploadMgr(t)
 	defer cleanup()
 
 	testMetaRoundTrip(t, mm)
 }
 
 func TestFileMetaListUploads(t *testing.T) {
-	mm, cleanup := newTestFilemetaUploadMgr(t)
+	mm, _, cleanup := newTestFilemetaUploadMgr(t)
 	defer cleanup()
 
 	testMetaListUploads(t, mm)
@@ -33,7 +35,7 @@ func TestListUploads(t *testing.T) {
 		numPart    = 10
 	)
 
-	mm, cleanup := newTestFilemetaUploadMgr(t)
+	mm, _, cleanup := newTestFilemetaUploadMgr(t)
 	defer cleanup()
 
 	// do upload
@@ -84,18 +86,38 @@ func TestListUploads(t *testing.T) {
 	}
 }
 
-func newTestFilemetaUploadMgr(t *testing.T) (*filemetaUploadMgr, func()) {
+func newTestFilemetaUploadMgr(t *testing.T) (*filemetaUploadMgr, meta.Storage, func()) {
 	tmpDir, err := ioutil.TempDir("", "")
 	if err != nil {
 		t.Fatalf("newTestFilemetaUploadMgr failed to create metaDir: %v", err)
 	}
-	fmu, err := newFilemetaUploadMgr(tmpDir)
+
+	metaStor, metaStorClean := createsDefaultMetaStor(t, tmpDir)
+
+	fmu, err := newFilemetaUploadMgr(tmpDir, metaStor)
 	if err != nil {
 		t.Fatalf("newTestFilemetaUploadMgr failed to create mgr: %v", err)
 	}
 
-	return fmu, func() {
+	return fmu, metaStor, func() {
 		fmu.Close()
 		os.RemoveAll(tmpDir)
+		metaStorClean()
+	}
+}
+
+func createsDefaultMetaStor(t *testing.T, metaDir string) (meta.Storage, func()) {
+	marshalFuncPair, err := encoding.NewMarshalFuncPair(encoding.MarshalTypeProtobuf)
+	if err != nil {
+		t.Fatalf("failed to create marshaller:%v", err)
+	}
+
+	stor, err := meta.NewDefaultMetastor(metaDir, marshalFuncPair)
+	if err != nil {
+		t.Fatalf("failed to creates DefaultMetastor:%v", err)
+	}
+
+	return stor, func() {
+		stor.Close()
 	}
 }

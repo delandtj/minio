@@ -5,6 +5,7 @@ import (
 	"io"
 
 	minio "github.com/minio/minio/cmd"
+	"github.com/minio/minio/cmd/gateway/zerostor/meta"
 	"github.com/zero-os/0-stor/client/metastor/metatypes"
 )
 
@@ -58,6 +59,9 @@ type MetaManager interface {
 	// Remove PartInfo with given etag & partID from an uploadID
 	DelPart(bucket, uploadID string, etag string, partID int) error
 
+	// SetZstorMeta set 0-stor metadata of the multipart metadata to the given md
+	SetZstorMeta(md metatypes.Metadata) error
+
 	// ListUpload returns all unfinished multipart upload, sorted by upload ID
 	ListUpload(bucket string) ([]Info, error)
 
@@ -85,13 +89,14 @@ type Info struct {
 
 // PartInfo represent info/metadata of an uploaded part
 type PartInfo struct {
-	Object string // object name in 0-stor
 	minio.PartInfo
+	Object    string // object name in 0-stor
+	ZstorMeta metatypes.Metadata
 }
 
 // NewDefaultManager creates new default multipart manager
-func NewDefaultManager(stor Storage, metaDir string) (Manager, error) {
-	metaMgr, err := newFilemetaUploadMgr(metaDir)
+func NewDefaultManager(stor Storage, metaDir string, metaStor meta.Storage) (Manager, error) {
+	metaMgr, err := newFilemetaUploadMgr(metaDir, metaStor)
 	if err != nil {
 		return nil, err
 	}
