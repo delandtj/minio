@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/zero-os/0-stor/client/metastor/encoding"
+	"github.com/threefoldtech/0-stor/client/metastor/encoding"
 )
 
 func TestFilemetaStorRoundTrip(t *testing.T) {

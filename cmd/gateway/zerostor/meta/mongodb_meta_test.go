@@ -3,7 +3,7 @@ package meta
 import (
 	"testing"
 
-	"github.com/zero-os/0-stor/client/metastor/encoding"
+	"github.com/threefoldtech/0-stor/client/metastor/encoding"
 )
 
 func TestMongoStorRoundTrip(t *testing.T) {

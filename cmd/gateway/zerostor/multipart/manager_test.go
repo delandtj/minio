@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	minio "github.com/minio/minio/cmd"
-	"github.com/zero-os/0-stor/client/metastor"
+	"github.com/threefoldtech/0-stor/client/metastor"
 )
 
 func TestManagerComplete(t *testing.T) {

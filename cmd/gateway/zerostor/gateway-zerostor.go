@@ -19,8 +19,8 @@ import (
 	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 
-	"github.com/zero-os/0-stor/client/datastor"
-	"github.com/zero-os/0-stor/client/metastor"
+	"github.com/threefoldtech/0-stor/client/datastor"
+	"github.com/threefoldtech/0-stor/client/metastor"
 )
 
 const (

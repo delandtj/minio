@@ -6,10 +6,10 @@ import (
 	"testing"
 
 	"github.com/minio/minio/cmd/gateway/zerostor/meta"
-	"github.com/zero-os/0-stor/client"
-	zdbtest "github.com/zero-os/0-stor/client/datastor/zerodb/test"
-	"github.com/zero-os/0-stor/client/metastor"
-	"github.com/zero-os/0-stor/client/metastor/encoding"
+	"github.com/threefoldtech/0-stor/client"
+	zdbtest "github.com/threefoldtech/0-stor/client/datastor/zerodb/test"
+	"github.com/threefoldtech/0-stor/client/metastor"
+	"github.com/threefoldtech/0-stor/client/metastor/encoding"
 )
 
 func newTestInMemZstorClient(t *testing.T, namespace string) (zstorClient, meta.Storage, meta.BucketManager, func(), string) {

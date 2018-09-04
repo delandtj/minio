@@ -3,8 +3,8 @@ package zerostor
 import (
 	"io"
 
-	"github.com/zero-os/0-stor/client/datastor/pipeline/storage"
-	"github.com/zero-os/0-stor/client/metastor/metatypes"
+	"github.com/threefoldtech/0-stor/client/datastor/pipeline/storage"
+	"github.com/threefoldtech/0-stor/client/metastor/metatypes"
 )
 
 // zstorClient define 0-stor client

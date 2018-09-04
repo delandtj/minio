@@ -6,8 +6,8 @@ import (
 
 	"github.com/minio/minio-go/pkg/policy"
 	minio "github.com/minio/minio/cmd"
-	"github.com/zero-os/0-stor/client/metastor/db"
-	"github.com/zero-os/0-stor/client/metastor/metatypes"
+	"github.com/threefoldtech/0-stor/client/metastor/db"
+	"github.com/threefoldtech/0-stor/client/metastor/metatypes"
 )
 
 var (

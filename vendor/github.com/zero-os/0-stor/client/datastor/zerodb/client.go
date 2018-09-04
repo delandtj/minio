@@ -25,7 +25,7 @@ import (
 
 	"github.com/garyburd/redigo/redis"
 
-	"github.com/zero-os/0-stor/client/datastor"
+	"github.com/threefoldtech/0-stor/client/datastor"
 )
 
 var (

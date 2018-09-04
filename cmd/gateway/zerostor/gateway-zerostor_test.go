@@ -11,8 +11,8 @@ import (
 	"github.com/minio/minio-go/pkg/policy"
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/pkg/errors"
-	"github.com/zero-os/0-stor/client/datastor"
-	"github.com/zero-os/0-stor/client/metastor"
+	"github.com/threefoldtech/0-stor/client/datastor"
+	"github.com/threefoldtech/0-stor/client/metastor"
 )
 
 func TestZstorToObjectError(t *testing.T) {

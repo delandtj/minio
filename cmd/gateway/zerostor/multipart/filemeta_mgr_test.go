@@ -10,7 +10,7 @@ import (
 
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/cmd/gateway/zerostor/meta"
-	"github.com/zero-os/0-stor/client/metastor/encoding"
+	"github.com/threefoldtech/0-stor/client/metastor/encoding"
 )
 
 func TestFileMetaRoundTrip(t *testing.T) {

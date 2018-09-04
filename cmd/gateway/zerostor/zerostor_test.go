@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/minio/minio/cmd/gateway/zerostor/meta"
-	"github.com/zero-os/0-stor/client/metastor/db"
+	"github.com/threefoldtech/0-stor/client/metastor/db"
 )
 
 // Test roundtrip: get set delete

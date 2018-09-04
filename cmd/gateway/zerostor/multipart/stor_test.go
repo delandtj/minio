@@ -5,11 +5,11 @@ import (
 	"path"
 	"testing"
 
-	"github.com/zero-os/0-stor/client"
-	zdbtest "github.com/zero-os/0-stor/client/datastor/zerodb/test"
-	"github.com/zero-os/0-stor/client/metastor"
-	"github.com/zero-os/0-stor/client/metastor/db"
-	"github.com/zero-os/0-stor/client/metastor/metatypes"
+	"github.com/threefoldtech/0-stor/client"
+	zdbtest "github.com/threefoldtech/0-stor/client/datastor/zerodb/test"
+	"github.com/threefoldtech/0-stor/client/metastor"
+	"github.com/threefoldtech/0-stor/client/metastor/db"
+	"github.com/threefoldtech/0-stor/client/metastor/metatypes"
 )
 
 type testZstorClient struct {

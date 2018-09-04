@@ -6,7 +6,7 @@ import (
 	"path"
 
 	minio "github.com/minio/minio/cmd"
-	"github.com/zero-os/0-stor/client/metastor/metatypes"
+	"github.com/threefoldtech/0-stor/client/metastor/metatypes"
 )
 
 const (
