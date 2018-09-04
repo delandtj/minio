@@ -335,6 +335,12 @@
 			"revisionTime": "2016-01-12T19:33:35Z"
 		},
 		{
+			"checksumSHA1": "hZJ8CMNq8+pobQ/pc88dsUnYs+c=",
+			"path": "github.com/iwanbk/redcon",
+			"revision": "b6e65d498dd66e3919b2eb74364094c804f13567",
+			"revisionTime": "2017-11-09T12:50:32Z"
+		},
+		{
 			"checksumSHA1": "Lg8OHK87XRGCaipG+5+zFyN8OMw=",
 			"path": "github.com/joyent/triton-go",
 			"revision": "7e6a47b300b10be9449610a6ff4fbae17d6e95b6",
