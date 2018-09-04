@@ -629,6 +629,84 @@
 			"revisionTime": "2017-07-25T13:49:12Z"
 		},
 		{
+			"checksumSHA1": "sbA+IFx1orNP4ZW/kh/vSGLTOIs=",
+			"path": "github.com/threefoldtech/0-stor/client",
+			"revision": "b2388a7491ab3a3e26fa836a8ffb426674be5647",
+			"revisionTime": "2018-09-04T13:13:38Z"
+		},
+		{
+			"checksumSHA1": "2bhvnPfb8HYjGzdr7itKhJ5h718=",
+			"path": "github.com/threefoldtech/0-stor/client/datastor",
+			"revision": "b2388a7491ab3a3e26fa836a8ffb426674be5647",
+			"revisionTime": "2018-09-04T13:13:38Z"
+		},
+		{
+			"checksumSHA1": "wsLgGNVGLkENG5Ik2RnEM2VsO4Y=",
+			"path": "github.com/threefoldtech/0-stor/client/datastor/pipeline",
+			"revision": "b2388a7491ab3a3e26fa836a8ffb426674be5647",
+			"revisionTime": "2018-09-04T13:13:38Z"
+		},
+		{
+			"checksumSHA1": "gbQOm/qZo7zgXsG9OVOrJqVE49E=",
+			"path": "github.com/threefoldtech/0-stor/client/datastor/pipeline/crypto",
+			"revision": "b2388a7491ab3a3e26fa836a8ffb426674be5647",
+			"revisionTime": "2018-09-04T13:13:38Z"
+		},
+		{
+			"checksumSHA1": "p9wud2niXxNjeRDbfvSTQIn9Jf0=",
+			"path": "github.com/threefoldtech/0-stor/client/datastor/pipeline/storage",
+			"revision": "b2388a7491ab3a3e26fa836a8ffb426674be5647",
+			"revisionTime": "2018-09-04T13:13:38Z"
+		},
+		{
+			"checksumSHA1": "cMcm1c9vskrCGu04YG8l+Aeek6A=",
+			"path": "github.com/threefoldtech/0-stor/client/datastor/zerodb",
+			"revision": "b2388a7491ab3a3e26fa836a8ffb426674be5647",
+			"revisionTime": "2018-09-04T13:13:38Z"
+		},
+		{
+			"checksumSHA1": "dipo0bmEL6MEnYxuZrGApByexAw=",
+			"path": "github.com/threefoldtech/0-stor/client/datastor/zerodb/test",
+			"revision": "b2388a7491ab3a3e26fa836a8ffb426674be5647",
+			"revisionTime": "2018-09-04T13:13:38Z"
+		},
+		{
+			"checksumSHA1": "+ay6ymcWpjIRoL4zxWYY9oN6vpg=",
+			"path": "github.com/threefoldtech/0-stor/client/metastor",
+			"revision": "b2388a7491ab3a3e26fa836a8ffb426674be5647",
+			"revisionTime": "2018-09-04T13:13:38Z"
+		},
+		{
+			"checksumSHA1": "XoN/ypUA5TwDi0sXQ52EHgVHN0E=",
+			"path": "github.com/threefoldtech/0-stor/client/metastor/db",
+			"revision": "b2388a7491ab3a3e26fa836a8ffb426674be5647",
+			"revisionTime": "2018-09-04T13:13:38Z"
+		},
+		{
+			"checksumSHA1": "zaNoXmsaMUfpwrfcJvjZWPP4+Bc=",
+			"path": "github.com/threefoldtech/0-stor/client/metastor/encoding",
+			"revision": "b2388a7491ab3a3e26fa836a8ffb426674be5647",
+			"revisionTime": "2018-09-04T13:13:38Z"
+		},
+		{
+			"checksumSHA1": "/N/X6AlKseDLLR2oDU5OHsuD3WM=",
+			"path": "github.com/threefoldtech/0-stor/client/metastor/encoding/proto",
+			"revision": "b2388a7491ab3a3e26fa836a8ffb426674be5647",
+			"revisionTime": "2018-09-04T13:13:38Z"
+		},
+		{
+			"checksumSHA1": "nWddcX0aamA2pjeV7hDiM2kyfbk=",
+			"path": "github.com/threefoldtech/0-stor/client/metastor/metatypes",
+			"revision": "b2388a7491ab3a3e26fa836a8ffb426674be5647",
+			"revisionTime": "2018-09-04T13:13:38Z"
+		},
+		{
+			"checksumSHA1": "K4F4xZkgfh0eVOvP+FRrkd0N7kM=",
+			"path": "github.com/threefoldtech/0-stor/client/processing",
+			"revision": "b2388a7491ab3a3e26fa836a8ffb426674be5647",
+			"revisionTime": "2018-09-04T13:13:38Z"
+		},
+		{
 			"checksumSHA1": "k/Xh0p5L7+tBCXAL2dOCwUf9J3Y=",
 			"path": "github.com/tidwall/gjson",
 			"revision": "09d1c5c5bc64e094394dfe2150220d906c55ac37",
@@ -639,102 +717,6 @@
 			"path": "github.com/tidwall/match",
 			"revision": "173748da739a410c5b0b813b956f89ff94730b4c",
 			"revisionTime": "2016-08-30T17:39:30Z"
-		},
-		{
-			"checksumSHA1": "Cg9IQI8XwnmwRLPgIbmjJ4wP6ko=",
-			"path": "github.com/zero-os/0-stor/client",
-			"revision": "3e870578ca18a079d93ed5af065cdc1b5453eb41",
-			"revisionTime": "2018-07-03T20:06:32Z",
-			"version": "master",
-			"versionExact": "master"
-		},
-		{
-			"checksumSHA1": "mwmgtw8s6NIVxPppHuPMNOe/1cY=",
-			"path": "github.com/zero-os/0-stor/client/datastor",
-			"revision": "3e870578ca18a079d93ed5af065cdc1b5453eb41",
-			"revisionTime": "2018-07-03T20:06:32Z",
-			"version": "master",
-			"versionExact": "master"
-		},
-		{
-			"checksumSHA1": "VzDjTkm6L54WPQdG/h9Q4WtjKiY=",
-			"path": "github.com/zero-os/0-stor/client/datastor/pipeline",
-			"revision": "3e870578ca18a079d93ed5af065cdc1b5453eb41",
-			"revisionTime": "2018-07-03T20:06:32Z",
-			"version": "master",
-			"versionExact": "master"
-		},
-		{
-			"checksumSHA1": "+bmdzCEQXdUQvmm1q/FOdpYEYZg=",
-			"path": "github.com/zero-os/0-stor/client/datastor/pipeline/crypto",
-			"revision": "3e870578ca18a079d93ed5af065cdc1b5453eb41",
-			"revisionTime": "2018-07-03T20:06:32Z",
-			"version": "master",
-			"versionExact": "master"
-		},
-		{
-			"checksumSHA1": "A+MJ2BkjJqHFultIed6n8XOkAeo=",
-			"path": "github.com/zero-os/0-stor/client/datastor/pipeline/storage",
-			"revision": "3e870578ca18a079d93ed5af065cdc1b5453eb41",
-			"revisionTime": "2018-07-03T20:06:32Z",
-			"version": "master",
-			"versionExact": "master"
-		},
-		{
-			"checksumSHA1": "2iazbOC6V+VTTgwwFiKrMp14d/A=",
-			"path": "github.com/zero-os/0-stor/client/datastor/zerodb",
-			"revision": "3e870578ca18a079d93ed5af065cdc1b5453eb41",
-			"revisionTime": "2018-07-03T20:06:32Z",
-			"version": "master",
-			"versionExact": "master"
-		},
-		{
-			"checksumSHA1": "e8e1OJyJm89tBfoS9q4Lk1HCZGo=",
-			"path": "github.com/zero-os/0-stor/client/metastor",
-			"revision": "3e870578ca18a079d93ed5af065cdc1b5453eb41",
-			"revisionTime": "2018-07-03T20:06:32Z",
-			"version": "master",
-			"versionExact": "master"
-		},
-		{
-			"checksumSHA1": "F6HIHtWexEW+qbyauBPCqN3lKAk=",
-			"path": "github.com/zero-os/0-stor/client/metastor/db",
-			"revision": "3e870578ca18a079d93ed5af065cdc1b5453eb41",
-			"revisionTime": "2018-07-03T20:06:32Z",
-			"version": "master",
-			"versionExact": "master"
-		},
-		{
-			"checksumSHA1": "bn5Hj4N9ne17Lb0oYC/6laB4yds=",
-			"path": "github.com/zero-os/0-stor/client/metastor/encoding",
-			"revision": "3e870578ca18a079d93ed5af065cdc1b5453eb41",
-			"revisionTime": "2018-07-03T20:06:32Z",
-			"version": "master",
-			"versionExact": "master"
-		},
-		{
-			"checksumSHA1": "ULvYdBaDMjDC4/GaABg81bKS1aQ=",
-			"path": "github.com/zero-os/0-stor/client/metastor/encoding/proto",
-			"revision": "3e870578ca18a079d93ed5af065cdc1b5453eb41",
-			"revisionTime": "2018-07-03T20:06:32Z",
-			"version": "master",
-			"versionExact": "master"
-		},
-		{
-			"checksumSHA1": "mgp/k6OCRn6fGGc2k5xm6yAsK1Q=",
-			"path": "github.com/zero-os/0-stor/client/metastor/metatypes",
-			"revision": "3e870578ca18a079d93ed5af065cdc1b5453eb41",
-			"revisionTime": "2018-07-03T20:06:32Z",
-			"version": "master",
-			"versionExact": "master"
-		},
-		{
-			"checksumSHA1": "juOiRCtH1gNFjoTCwBJqxNDyXAA=",
-			"path": "github.com/zero-os/0-stor/client/processing",
-			"revision": "3e870578ca18a079d93ed5af065cdc1b5453eb41",
-			"revisionTime": "2018-07-03T20:06:32Z",
-			"version": "master",
-			"versionExact": "master"
 		},
 		{
 			"checksumSHA1": "6NS7FWJl1FobB+Xfe4SzBGD+75g=",
