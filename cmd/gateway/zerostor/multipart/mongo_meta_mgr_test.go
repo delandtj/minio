@@ -1,5 +1,6 @@
 package multipart
 
+/*
 import (
 	"testing"
 )
@@ -30,3 +31,4 @@ func newTestMongoMetaMgr(t *testing.T) (*MongoMetaMgr, func()) {
 
 	}
 }
+*/
