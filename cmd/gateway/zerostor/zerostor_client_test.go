@@ -60,12 +60,12 @@ func newTestZstorClient(t *testing.T, namespace string, metaCli *metastor.Client
 	cfg.DataStor.Pipeline.BlockSize = 64
 
 	// creates metadata storage
-	client, err := client.NewClientFromConfig(cfg, metaCli, 0)
+	cl, err := client.NewClientFromConfig(cfg, metaCli, 0)
 	if err != nil {
 		t.Fatalf("failed to creates 0-stor client:%v", err)
 	}
 
-	return client, func() {
+	return cl, func() {
 		client.Close()
 		serverClean()
 	}
