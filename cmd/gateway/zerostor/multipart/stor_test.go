@@ -38,18 +38,18 @@ func newTestZstorClient(t *testing.T, metaDB db.DB) (*testZstorClient, func()) {
 	}
 
 	// creates metadata storage
-	client, err := client.NewClientFromConfig(cfg, zMetaStorCli, 0)
+	cl, err := client.NewClientFromConfig(cfg, zMetaStorCli, 0)
 	if err != nil {
 		t.Fatalf("failed to creates 0-stor client:%v", err)
 	}
 
 	tz := testZstorClient{
-		zstorCli: client,
+		zstorCli: cl,
 		metaCli:  zMetaStorCli,
 	}
 
 	return &tz, func() {
-		client.Close()
+		cl.Close()
 		serverClean()
 	}
 }

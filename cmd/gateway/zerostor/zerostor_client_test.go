@@ -66,7 +66,7 @@ func newTestZstorClient(t *testing.T, namespace string, metaCli *metastor.Client
 	}
 
 	return cl, func() {
-		client.Close()
+		cl.Close()
 		serverClean()
 	}
 }
