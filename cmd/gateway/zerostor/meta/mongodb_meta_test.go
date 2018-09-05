@@ -1,5 +1,7 @@
 package meta
 
+/*
+
 import (
 	"testing"
 
@@ -48,3 +50,4 @@ func newMongoMetaStor() (mStor *MongoMetaStor, marshalFnPair *encoding.MarshalFu
 
 	return
 }
+*/

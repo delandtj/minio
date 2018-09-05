@@ -1,5 +1,7 @@
 package meta
 
+/*
+
 import (
 	"testing"
 )
@@ -39,3 +41,5 @@ func newMongoBktMgr() (bm BucketManager, constr bktMgrConstructor, cleanup func(
 	}
 	return
 }
+
+*/
